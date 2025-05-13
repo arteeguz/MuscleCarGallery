@@ -1,1 +1,4 @@
 =IFERROR(VLOOKUP(A2, '[2025 Summer Interns Tech Pick Up.xlsx]TechPickUp'!$D:$P, 8, FALSE), "")
+=IFERROR(VLOOKUP(A2, '[2025 Summer Interns Tech Pick Up.xlsx]TechPickUp'!$D:$P, 12, FALSE), "")
+=IFERROR(VLOOKUP(A2, '[2025 Summer Interns Tech Pick Up.xlsx]TechPickUp'!$D:$P, 13, FALSE), "")
+
