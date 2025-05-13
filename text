@@ -1,4 +1,2 @@
-=IFERROR(VLOOKUP(A2, '[2025 Summer Interns Tech Pick Up.xlsx]TechPickUp'!$D:$P, 8, FALSE), "")
-=IFERROR(VLOOKUP(A2, '[2025 Summer Interns Tech Pick Up.xlsx]TechPickUp'!$D:$P, 12, FALSE), "")
-=IFERROR(VLOOKUP(A2, '[2025 Summer Interns Tech Pick Up.xlsx]TechPickUp'!$D:$P, 13, FALSE), "")
+=IFERROR(INDEX('[2025SummerInternsTechPickUp.xlsx]MasterTracker'!$K:$K, MATCH(A2, '[2025SummerInternsTechPickUp.xlsx]TechPickUp'!$D:$D, 0)), "")
 
