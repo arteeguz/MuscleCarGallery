@@ -1,0 +1,114 @@
+Sub GenerateQRCodesInCells()
+    Dim ws As Worksheet
+    Dim lastRow As Long
+    Dim linkCol As String
+    Dim qrCol As String
+    Dim i As Long
+    Dim folderPath As String
+    
+    ' Set up variables
+    Set ws = ActiveSheet
+    linkCol = "A" ' Column with your links - CHANGE THIS IF YOUR LINKS ARE IN A DIFFERENT COLUMN
+    qrCol = "B"   ' Column where QR codes will appear - CHANGE THIS IF NEEDED
+    
+    ' Create folder for QR codes if it doesn't exist
+    folderPath = ThisWorkbook.Path & "\QRCodes\"
+    If Dir(folderPath, vbDirectory) = "" Then
+        MkDir folderPath
+    End If
+    
+    ' Find the last row with data
+    lastRow = ws.Cells(ws.Rows.Count, linkCol).End(xlUp).Row
+    
+    ' Process each row
+    For i = 2 To lastRow ' Starting from row 2 (assuming row 1 has headers)
+        Dim linkText As String
+        Dim qrFilePath As String
+        
+        ' Get the link text
+        linkText = ws.Cells(i, linkCol).Value
+        
+        If Len(linkText) > 0 Then
+            ' Create filename for this QR code
+            qrFilePath = folderPath & "QR_" & i & ".png"
+            
+            ' Generate and save QR code using Google Charts API
+            If GenerateQRCodeImage(linkText, qrFilePath) Then
+                ' Insert the QR code image into the cell
+                InsertImageToCell ws, qrCol & i, qrFilePath
+                
+                ' Add the file path in column C (optional, for reference)
+                ws.Cells(i, qrCol).Offset(0, 1).Value = qrFilePath
+            Else
+                ws.Cells(i, qrCol).Value = "Error generating QR code"
+            End If
+        End If
+    Next i
+    
+    MsgBox "QR Codes generated successfully!", vbInformation
+End Sub
+
+Function GenerateQRCodeImage(dataText As String, saveToPath As String) As Boolean
+    On Error GoTo ErrorHandler
+    
+    ' Create QR code using Google Charts API
+    Dim xmlhttp As Object
+    Set xmlhttp = CreateObject("MSXML2.XMLHTTP")
+    
+    ' Prepare URL for Google Charts API
+    Dim qrURL As String
+    qrURL = "https://chart.googleapis.com/chart?cht=qr&chs=300x300&chl=" & _
+            Application.EncodeURL(dataText)
+    
+    ' Download QR code image
+    xmlhttp.Open "GET", qrURL, False
+    xmlhttp.send
+    
+    If xmlhttp.Status = 200 Then
+        ' Save the image to file
+        Dim stream As Object
+        Set stream = CreateObject("ADODB.Stream")
+        stream.Open
+        stream.Type = 1 ' Binary
+        stream.Write xmlhttp.responseBody
+        stream.SaveToFile saveToPath, 2 ' Overwrite
+        stream.Close
+        
+        GenerateQRCodeImage = True
+    Else
+        GenerateQRCodeImage = False
+    End If
+    
+    Exit Function
+    
+ErrorHandler:
+    GenerateQRCodeImage = False
+End Function
+
+Sub InsertImageToCell(ws As Worksheet, cellAddress As String, imagePath As String)
+    On Error Resume Next
+    
+    ' Delete any existing shape in this cell
+    Dim shp As Shape
+    For Each shp In ws.Shapes
+        If Not Intersect(ws.Range(cellAddress), ws.Range(shp.TopLeftCell.Address & ":" & shp.BottomRightCell.Address)) Is Nothing Then
+            shp.Delete
+        End If
+    Next shp
+    
+    ' Insert the image
+    Set shp = ws.Shapes.AddPicture( _
+        Filename:=imagePath, _
+        LinkToFile:=False, _
+        SaveWithDocument:=True, _
+        Left:=ws.Range(cellAddress).Left, _
+        Top:=ws.Range(cellAddress).Top, _
+        Width:=ws.Range(cellAddress).Width, _
+        Height:=ws.Range(cellAddress).Height)
+        
+    ' Set properties for the shape
+    With shp
+        .LockAspectRatio = msoTrue
+        .Placement = xlMoveAndSize
+    End With
+End Sub
