@@ -2,6 +2,7 @@ import pandas as pd
 import qrcode
 from openpyxl import load_workbook
 from openpyxl.drawing.image import Image as ExcelImage
+from openpyxl.utils import get_column_letter
 import io
 import os
 
@@ -42,14 +43,14 @@ def embed_qr_codes_in_excel(excel_file_path, link_column_name):
         ws = wb.active
         
         print("🎯 Step 5: Setting up columns...")
-        # Get column positions
+        # Get column positions using openpyxl's built-in function
         headers = list(df.columns)
-        link_col_index = headers.index(link_column_name)
-        link_col_letter = chr(65 + link_col_index)  # Convert to Excel column letter (A, B, C...)
+        link_col_index = headers.index(link_column_name) + 1  # 1-based for Excel
+        link_col_letter = get_column_letter(link_col_index)
         
         # Find an empty column for QR codes
-        qr_col_index = len(headers)
-        qr_col_letter = chr(65 + qr_col_index)
+        qr_col_index = len(headers) + 1  # 1-based for Excel
+        qr_col_letter = get_column_letter(qr_col_index)
         
         print(f"🔗 Links in column {link_col_letter} (index {link_col_index})")
         print(f"📱 QR codes will go in column {qr_col_letter} (index {qr_col_index})")
