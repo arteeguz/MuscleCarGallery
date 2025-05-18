@@ -5,6 +5,7 @@ import os
 def generate_qr_files_for_publisher(excel_file_path, link_column_name):
     """
     Generate QR codes as separate image files for Publisher mail merge
+    Creates both full paths and relative paths for compatibility
     """
     
     try:
@@ -19,13 +20,16 @@ def generate_qr_files_for_publisher(excel_file_path, link_column_name):
             return False
         
         print("📁 Step 3: Creating QR codes folder...")
-        # Create folder for QR code images
-        qr_folder = os.path.splitext(excel_file_path)[0] + "_QR_Images"
+        # Create folder for QR code images in same directory as Excel file
+        base_name = os.path.splitext(os.path.basename(excel_file_path))[0]
+        qr_folder = "QR_Images"
         os.makedirs(qr_folder, exist_ok=True)
         print(f"✅ Folder created: {qr_folder}")
         
         print("⚡ Step 4: Generating QR code files...")
-        qr_paths = []
+        qr_relative_paths = []
+        qr_full_paths = []
+        qr_filenames = []
         successful_qrs = 0
         
         # Process each row
@@ -35,7 +39,9 @@ def generate_qr_files_for_publisher(excel_file_path, link_column_name):
             
             # Skip empty/invalid links
             if pd.isna(website_link) or str(website_link).strip() == '':
-                qr_paths.append('')
+                qr_relative_paths.append('')
+                qr_full_paths.append('')
+                qr_filenames.append('')
                 print(f"  ⏭️  Row {row_number}: Skipping (empty link)")
                 continue
             
@@ -47,7 +53,7 @@ def generate_qr_files_for_publisher(excel_file_path, link_column_name):
                 qr = qrcode.QRCode(
                     version=1,
                     error_correction=qrcode.constants.ERROR_CORRECT_L,
-                    box_size=10,
+                    box_size=10,  # Good size for printing
                     border=4,
                 )
                 qr.add_data(website_link)
@@ -57,39 +63,111 @@ def generate_qr_files_for_publisher(excel_file_path, link_column_name):
                 qr_image = qr.make_image(fill_color="black", back_color="white")
                 
                 # Save as PNG file
-                filename = f"QR_{row_number:03d}.png"
+                filename = f"QR_{row_number:03d}.png"  # QR_001.png, QR_002.png, etc.
                 file_path = os.path.join(qr_folder, filename)
                 qr_image.save(file_path)
                 
-                # Store the relative file path (only filename)
-                qr_paths.append(filename)
+                # Store different path formats for compatibility
+                full_path = os.path.abspath(file_path)
+                relative_path = file_path  # QR_Images\QR_001.png
+                
+                qr_relative_paths.append(relative_path)
+                qr_full_paths.append(full_path)
+                qr_filenames.append(filename)
                 successful_qrs += 1
                 print(f"  ✅ Row {row_number}: Saved as {filename}")
                 
             except Exception as e:
-                qr_paths.append('')
+                qr_relative_paths.append('')
+                qr_full_paths.append('')
+                qr_filenames.append('')
                 print(f"  ❌ Row {row_number}: Error - {str(e)}")
         
-        print("📝 Step 5: Creating new Excel file with QR paths...")
-        # Add QR code file paths to the dataframe
-        df['QR_Code_Path'] = qr_paths
+        print("📝 Step 5: Creating Excel files for Publisher...")
+        # Create Excel file with relative paths (preferred for Publisher)
+        df_relative = df.copy()
+        df_relative['QR_Code_Path'] = qr_relative_paths
+        df_relative['QR_Filename'] = qr_filenames
         
-        # Save new Excel file
-        output_file = excel_file_path.replace('.xlsx', '_for_Publisher.xlsx')
-        df.to_excel(output_file, index=False)
+        # Create Excel file with full paths (backup option)
+        df_full = df.copy()
+        df_full['QR_Code_Full_Path'] = qr_full_paths
+        df_full['QR_Filename'] = qr_filenames
+        
+        # Save both versions
+        output_file_relative = excel_file_path.replace('.xlsx', '_for_Publisher_Relative.xlsx')
+        output_file_full = excel_file_path.replace('.xlsx', '_for_Publisher_Full.xlsx')
+        
+        df_relative.to_excel(output_file_relative, index=False)
+        df_full.to_excel(output_file_full, index=False)
         
         print(f"✅ SUCCESS!")
         print(f"📊 Summary: {successful_qrs} QR codes created")
         print(f"📁 QR images saved in: {qr_folder}")
-        print(f"📄 New Excel file: {output_file}")
-        print(f"\n🎯 For Publisher Mail Merge:")
-        print(f"1. Use the file: {output_file}")
-        print(f"2. The 'QR_Code_Path' column contains paths to QR images (relative paths).")
-        print(f"3. In Publisher, insert Image from File and select the 'QR_Code_Path' field")
-        print(f"4. Make sure the folder with QR images is in the same directory as the Excel file.")
+        print(f"📄 Excel with relative paths: {output_file_relative}")
+        print(f"📄 Excel with full paths: {output_file_full}")
+        
+        print(f"\n🎯 Publisher Mail Merge Instructions:")
+        print(f"=" * 50)
+        print(f"METHOD 1 - Try this first:")
+        print(f"1. Open Publisher, start mail merge with: {output_file_relative}")
+        print(f"2. Position cursor where you want QR code")
+        print(f"3. Insert > Mail Merge > Picture Field")
+        print(f"4. Select 'QR_Code_Path' from dropdown")
+        print(f"")
+        print(f"METHOD 2 - If Method 1 doesn't work:")
+        print(f"1. Insert > Picture > From File")
+        print(f"2. Browse and select any QR image (as placeholder)")
+        print(f"3. Right-click image > Change Picture > From Mail Merge Data Source")
+        print(f"4. Select 'QR_Code_Path' field")
+        print(f"")
+        print(f"METHOD 3 - If having path issues:")
+        print(f"1. Use the file: {output_file_full}")
+        print(f"2. Use field 'QR_Code_Full_Path' instead")
         
         return True
         
     except Exception as e:
         print(f"❌ Error: {str(e)}")
         return False
+
+# Interactive function
+def run_qr_file_generator():
+    """Interactive function to run the QR file generator"""
+    
+    print("🚀 QR Code File Generator for Publisher Mail Merge")
+    print("=" * 50)
+    
+    # Get file path
+    excel_file = input("📂 Enter your Excel file name (with .xlsx): ").strip()
+    
+    # Check if file exists
+    if not os.path.exists(excel_file):
+        print(f"❌ File '{excel_file}' not found")
+        print(f"📁 Current directory: {os.getcwd()}")
+        return
+    
+    # Show available columns
+    try:
+        df = pd.read_excel(excel_file)
+        print("\n📋 Available columns:")
+        for i, col in enumerate(df.columns):
+            print(f"   {i+1}. {col}")
+    except Exception as e:
+        print(f"❌ Error reading file: {e}")
+        return
+    
+    # Get column name
+    link_column = input("\n🔗 Enter the exact name of your website link column: ").strip()
+    
+    # Run the generator
+    success = generate_qr_files_for_publisher(excel_file, link_column)
+    
+    if success:
+        print("\n🎉 All set! Try the methods above in Publisher.")
+        print("\n💡 Pro tip: Keep the QR_Images folder in the same directory")
+        print("   as your Excel file for best compatibility!")
+
+# Run the script
+if __name__ == "__main__":
+    run_qr_file_generator()
