@@ -3,96 +3,180 @@ import qrcode
 from openpyxl import load_workbook
 from openpyxl.drawing.image import Image as ExcelImage
 import io
+import os
 
 def embed_qr_codes_in_excel(excel_file_path, link_column_name):
     """
-    Simple function to generate QR codes and embed them directly in Excel
-    
-    Parameters:
-    excel_file_path: Path to your Excel file (e.g., "data.xlsx")
-    link_column_name: Exact name of the column with website links (e.g., "Website_Link")
+    Robust function to generate QR codes and embed them directly in Excel
     """
     
-    print("Step 1: Reading Excel file...")
-    # Read the Excel file to get the data
-    df = pd.read_excel(excel_file_path)
-    print(f"Found {len(df)} rows of data")
+    try:
+        print("🔍 Step 1: Checking file...")
+        # Check if file exists
+        if not os.path.exists(excel_file_path):
+            print(f"❌ Error: File '{excel_file_path}' not found!")
+            return False
+        
+        print("📖 Step 2: Reading Excel file...")
+        # Read the Excel file
+        df = pd.read_excel(excel_file_path)
+        print(f"✅ Found {len(df)} rows of data")
+        print(f"📋 Available columns: {list(df.columns)}")
+        
+        print("🔍 Step 3: Checking column name...")
+        # Check if the link column exists
+        if link_column_name not in df.columns:
+            print(f"❌ Error: Column '{link_column_name}' not found!")
+            print(f"💡 Available columns are: {list(df.columns)}")
+            print("💡 Please check the exact spelling and case of your column name")
+            return False
+        
+        print("📂 Step 4: Creating backup and loading workbook...")
+        # Create backup
+        backup_file = excel_file_path.replace('.xlsx', '_backup.xlsx')
+        df.to_excel(backup_file, index=False)
+        print(f"✅ Backup created: {backup_file}")
+        
+        # Load workbook
+        wb = load_workbook(excel_file_path)
+        ws = wb.active
+        
+        print("🎯 Step 5: Setting up columns...")
+        # Get column positions
+        headers = list(df.columns)
+        link_col_index = headers.index(link_column_name)
+        link_col_letter = chr(65 + link_col_index)  # Convert to Excel column letter (A, B, C...)
+        
+        # Find an empty column for QR codes
+        qr_col_index = len(headers)
+        qr_col_letter = chr(65 + qr_col_index)
+        
+        print(f"🔗 Links in column {link_col_letter} (index {link_col_index})")
+        print(f"📱 QR codes will go in column {qr_col_letter} (index {qr_col_index})")
+        
+        # Add QR Code header
+        ws[f'{qr_col_letter}1'] = 'QR_Code'
+        
+        print("⚡ Step 6: Processing rows...")
+        successful_qrs = 0
+        
+        # Process each row
+        for index, row in df.iterrows():
+            excel_row = index + 2  # Excel row (1-indexed + header)
+            website_link = row[link_column_name]
+            
+            # Skip empty/invalid links
+            if pd.isna(website_link) or str(website_link).strip() == '' or str(website_link).lower() == 'nan':
+                print(f"  ⏭️  Row {excel_row}: Skipping (empty link)")
+                continue
+            
+            try:
+                website_link = str(website_link).strip()
+                print(f"  🔄 Row {excel_row}: Processing {website_link[:50]}...")
+                
+                # Generate QR code
+                qr = qrcode.QRCode(
+                    version=1,
+                    error_correction=qrcode.constants.ERROR_CORRECT_L,
+                    box_size=6,  # Smaller for better embedding
+                    border=1,
+                )
+                qr.add_data(website_link)
+                qr.make(fit=True)
+                
+                # Create QR code image
+                qr_image = qr.make_image(fill_color="black", back_color="white")
+                
+                # Convert to bytes for Excel
+                img_buffer = io.BytesIO()
+                qr_image.save(img_buffer, format='PNG')
+                img_buffer.seek(0)
+                
+                # Create Excel image
+                excel_img = ExcelImage(img_buffer)
+                excel_img.width = 60   # Smaller size to prevent corruption
+                excel_img.height = 60
+                
+                # Insert image in the QR code column, same row as the link
+                cell_position = f'{qr_col_letter}{excel_row}'
+                ws.add_image(excel_img, cell_position)
+                
+                successful_qrs += 1
+                print(f"  ✅ Row {excel_row}: QR code added successfully")
+                
+            except Exception as e:
+                print(f"  ❌ Row {excel_row}: Error creating QR code - {str(e)}")
+                continue
+        
+        print("💾 Step 7: Saving file...")
+        # Save with a new name to avoid corruption
+        output_file = excel_file_path.replace('.xlsx', '_with_QR_codes.xlsx')
+        
+        # Make sure the output file is not open
+        try:
+            wb.save(output_file)
+            print(f"✅ SUCCESS! File saved as: {output_file}")
+            print(f"📊 Summary: {successful_qrs} QR codes successfully embedded")
+            
+            # Close the workbook
+            wb.close()
+            
+            return True
+            
+        except PermissionError:
+            print(f"❌ Error: Cannot save file. Please make sure {output_file} is not open in Excel")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Unexpected error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+# Usage function with error handling
+def run_qr_generator():
+    """Interactive function to run the QR generator"""
     
-    print("\nStep 2: Loading workbook for image embedding...")
-    # Load the workbook to add images
-    wb = load_workbook(excel_file_path)
-    ws = wb.active  # Use the active sheet
+    print("🚀 QR Code Generator for Excel")
+    print("=" * 40)
     
-    print("\nStep 3: Finding link column...")
-    # Check if the link column exists
-    if link_column_name not in df.columns:
-        print(f"Error: Column '{link_column_name}' not found!")
-        print(f"Available columns: {list(df.columns)}")
+    # Get file path
+    excel_file = input("📂 Enter your Excel file name (with .xlsx): ").strip()
+    
+    # Check if file exists
+    if not os.path.exists(excel_file):
+        print(f"❌ File '{excel_file}' not found in current directory")
+        print(f"📁 Current directory: {os.getcwd()}")
+        print(f"📋 Files in current directory:")
+        for file in os.listdir('.'):
+            if file.endswith('.xlsx'):
+                print(f"   - {file}")
         return
     
-    # Find which column number the link column is (for Excel positioning)
-    link_col_number = df.columns.get_loc(link_column_name) + 1  # +1 because Excel is 1-indexed
-    qr_col_number = link_col_number + 1  # QR codes will go in the next column
+    # Get column name
+    print("\n🔍 Let me check your columns first...")
+    try:
+        df = pd.read_excel(excel_file)
+        print("📋 Available columns:")
+        for i, col in enumerate(df.columns):
+            print(f"   {i+1}. {col}")
+    except Exception as e:
+        print(f"❌ Error reading file: {e}")
+        return
     
-    print(f"Links are in column {link_col_number}, QR codes will go in column {qr_col_number}")
+    link_column = input("\n🔗 Enter the exact name of your website link column: ").strip()
     
-    print("\nStep 4: Adding QR Code column header...")
-    # Add header for QR code column
-    ws.cell(row=1, column=qr_col_number, value='QR_Code')
+    # Run the generator
+    success = embed_qr_codes_in_excel(excel_file, link_column)
     
-    print("\nStep 5: Generating and embedding QR codes...")
-    # Process each row (starting from row 2, since row 1 is headers)
-    for index, row in df.iterrows():
-        excel_row = index + 2  # +2 because Excel starts at 1 and we skip header
-        website_link = row[link_column_name]
-        
-        # Check if there's a valid link in this row
-        if pd.notna(website_link) and str(website_link).strip():
-            print(f"  Processing row {excel_row}: {website_link}")
-            
-            # Generate QR code
-            qr = qrcode.QRCode(
-                version=1,  # Size of QR code
-                error_correction=qrcode.constants.ERROR_CORRECT_L,
-                box_size=8,  # Size of each box in pixels
-                border=2,    # Border size
-            )
-            qr.add_data(website_link)
-            qr.make(fit=True)
-            
-            # Create the QR code image
-            qr_image = qr.make_image(fill_color="black", back_color="white")
-            
-            # Convert to Excel-compatible format
-            img_buffer = io.BytesIO()
-            qr_image.save(img_buffer, format='PNG')
-            img_buffer.seek(0)
-            
-            # Create Excel image object
-            excel_img = ExcelImage(img_buffer)
-            excel_img.width = 80   # QR code width in pixels
-            excel_img.height = 80  # QR code height in pixels
-            
-            # Place QR code in the same row as the link
-            cell_address = f'{chr(64 + qr_col_number)}{excel_row}'
-            ws.add_image(excel_img, cell_address)
-            
-        else:
-            print(f"  Skipping row {excel_row}: No valid link")
-    
-    print("\nStep 6: Saving file...")
-    # Save the file with QR codes
-    output_file = excel_file_path.replace('.xlsx', '_with_QR_codes.xlsx')
-    wb.save(output_file)
-    
-    print(f"\n✅ Success! File saved as: {output_file}")
-    print(f"QR codes have been embedded in column {qr_col_number}, same rows as the links")
+    if success:
+        print("\n🎉 All done! You can now:")
+        print("1. Open the new Excel file with QR codes")
+        print("2. Use it in Publisher for mail merge")
+        print("3. The QR codes are in the same rows as your links")
+    else:
+        print("\n😞 Something went wrong. Please check the error messages above.")
 
-# Simple usage example
+# Run the interactive version
 if __name__ == "__main__":
-    # 🔧 CHANGE THESE VALUES TO MATCH YOUR FILE:
-    excel_file = "your_file.xlsx"  # Replace with your actual file name
-    link_column = "Website_Link"   # Replace with your actual column name
-    
-    # Run the function
-    embed_qr_codes_in_excel(excel_file, link_column)
+    run_qr_generator()
