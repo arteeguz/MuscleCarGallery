@@ -144,3 +144,247 @@ def run_qr_generator():
 # Run the script
 if __name__ == "__main__":
     run_qr_generator()
+
+
+###############################################################################################
+
+
+import pandas as pd
+import qrcode
+import os
+import re
+import hashlib
+
+def sanitize_filename(text, max_length=50):
+    """Create a safe filename from text"""
+    if pd.isna(text):
+        return "EMPTY"
+    
+    # Convert to string and clean
+    text = str(text).strip()
+    # Remove special characters, keep only alphanumeric, space, dash, underscore
+    text = re.sub(r'[^\w\s\-_]', '', text)
+    # Replace spaces with underscores
+    text = re.sub(r'\s+', '_', text)
+    # Limit length
+    if len(text) > max_length:
+        text = text[:max_length]
+    
+    return text if text else "EMPTY"
+
+def create_unique_qr_filename(row, unique_columns, row_index):
+    """Create a unique filename for each QR code based on record data"""
+    
+    # Try to use unique columns to create filename
+    if unique_columns:
+        parts = []
+        for col in unique_columns:
+            if col in row.index:
+                part = sanitize_filename(row[col], 20)  # Shorter parts
+                parts.append(part)
+        
+        if parts and all(part != "EMPTY" for part in parts):
+            filename = "_".join(parts)
+            return f"QR_{filename}.png"
+    
+    # Fallback: create hash from all row data to ensure uniqueness
+    row_string = "_".join([str(val) for val in row.values if pd.notna(val)])
+    row_hash = hashlib.md5(row_string.encode()).hexdigest()[:8]
+    return f"QR_Hash_{row_hash}.png"
+
+def generate_qr_codes_for_publisher(excel_file_path, link_column_name):
+    """
+    Generate QR codes with unique filenames that stay correct even after sorting
+    """
+    
+    try:
+        print("🔍 Step 1: Reading Excel file...")
+        df = pd.read_excel(excel_file_path)
+        print(f"✅ Found {len(df)} rows of data")
+        
+        print("🔍 Step 2: Checking column name...")
+        if link_column_name not in df.columns:
+            print(f"❌ Error: Column '{link_column_name}' not found!")
+            print(f"💡 Available columns: {list(df.columns)}")
+            return False
+        
+        print("🔍 Step 3: Determining unique identifier columns...")
+        # Try to identify good columns for unique filenames
+        potential_id_columns = []
+        
+        for col in df.columns:
+            col_lower = col.lower()
+            if any(keyword in col_lower for keyword in ['id', 'number', 'code', 'emp', 'employee']):
+                potential_id_columns.append(col)
+        
+        # If no ID columns, look for name columns
+        if not potential_id_columns:
+            for col in df.columns:
+                col_lower = col.lower()
+                if any(keyword in col_lower for keyword in ['name', 'first', 'last']):
+                    potential_id_columns.append(col)
+        
+        # Show options to user
+        print(f"📋 Available columns for unique QR naming:")
+        for i, col in enumerate(df.columns, 1):
+            indicator = " 🎯" if col in potential_id_columns else ""
+            print(f"   {i}. {col}{indicator}")
+        
+        print(f"\n💡 Columns marked with 🎯 are good for unique naming")
+        
+        unique_choice = input(f"\n🔑 Choose columns for unique QR names (e.g., '1,3' or press Enter for auto): ").strip()
+        
+        if unique_choice:
+            try:
+                indices = [int(x.strip()) - 1 for x in unique_choice.split(',')]
+                unique_columns = [df.columns[i] for i in indices if 0 <= i < len(df.columns)]
+            except:
+                print("❌ Invalid selection, using auto-detection")
+                unique_columns = potential_id_columns[:2]  # Use first 2 potential columns
+        else:
+            unique_columns = potential_id_columns[:2]  # Use first 2 potential columns
+        
+        print(f"✅ Using columns for unique names: {unique_columns}")
+        
+        print("📁 Step 4: Creating QR codes folder...")
+        qr_folder = "QR_Images"
+        os.makedirs(qr_folder, exist_ok=True)
+        
+        print("⚡ Step 5: Generating QR code files with unique names...")
+        qr_paths = []
+        qr_filenames = []
+        successful_qrs = 0
+        filename_count = {}  # Track duplicate filenames
+        
+        # Process each row
+        for index, row in df.iterrows():
+            row_number = index + 1
+            website_link = row[link_column_name]
+            
+            # Skip empty/invalid links
+            if pd.isna(website_link) or str(website_link).strip() == '':
+                qr_paths.append('')
+                qr_filenames.append('')
+                print(f"  ⏭️  Row {row_number}: Skipping (empty link)")
+                continue
+            
+            try:
+                website_link = str(website_link).strip()
+                
+                # Create unique filename for this record
+                base_filename = create_unique_qr_filename(row, unique_columns, index)
+                
+                # Handle duplicate filenames
+                if base_filename in filename_count:
+                    filename_count[base_filename] += 1
+                    name_part, ext = os.path.splitext(base_filename)
+                    filename = f"{name_part}_{filename_count[base_filename]}{ext}"
+                else:
+                    filename_count[base_filename] = 0
+                    filename = base_filename
+                
+                print(f"  🔄 Row {row_number}: Creating {filename} for {website_link[:30]}...")
+                
+                # Generate QR code
+                qr = qrcode.QRCode(
+                    version=1,
+                    error_correction=qrcode.constants.ERROR_CORRECT_L,
+                    box_size=10,
+                    border=4,
+                )
+                qr.add_data(website_link)
+                qr.make(fit=True)
+                
+                # Create QR code image
+                qr_image = qr.make_image(fill_color="black", back_color="white")
+                
+                # Save with unique filename
+                file_path = os.path.join(qr_folder, filename)
+                qr_image.save(file_path)
+                
+                # Store paths
+                full_path = os.path.abspath(file_path)
+                qr_paths.append(full_path)
+                qr_filenames.append(filename)
+                successful_qrs += 1
+                print(f"  ✅ Row {row_number}: Saved as {filename}")
+                
+            except Exception as e:
+                qr_paths.append('')
+                qr_filenames.append('')
+                print(f"  ❌ Row {row_number}: Error - {str(e)}")
+        
+        print("📝 Step 6: Creating Excel file for Publisher...")
+        # Add QR code information to dataframe
+        df['QR_Code_Full_Path'] = qr_paths
+        df['QR_Filename'] = qr_filenames
+        
+        # Save Excel file
+        output_file = excel_file_path.replace('.xlsx', '_for_Publisher.xlsx')
+        df.to_excel(output_file, index=False)
+        
+        print(f"✅ SUCCESS!")
+        print(f"📊 Summary: {successful_qrs} QR codes created with unique names")
+        print(f"📁 QR images saved in: {qr_folder}")
+        print(f"📄 Excel file for Publisher: {output_file}")
+        
+        print(f"\n🎯 Publisher Mail Merge Instructions:")
+        print(f"=" * 50)
+        print(f"1. Open Publisher and start mail merge with: {output_file}")
+        print(f"2. Insert text fields normally (Insert > Merge Field)")
+        print(f"3. For QR codes: Mailings > Picture")
+        print(f"4. Select 'QR_Code_Full_Path' from the dropdown")
+        print(f"5. ✅ Now you can SORT/FILTER your data safely!")
+        print(f"6. Each record will always get its correct QR code!")
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ Error: {str(e)}")
+        return False
+
+def run_qr_generator():
+    """Interactive function to run the QR generator"""
+    
+    print("🚀 QR Code Generator with Unique Record-Based Naming")
+    print("=" * 60)
+    print("🔒 This version creates QR codes that stay correct even after sorting!")
+    
+    # Get file path
+    excel_file = input("\n📂 Enter your Excel file name (with .xlsx): ").strip()
+    
+    # Check if file exists
+    if not os.path.exists(excel_file):
+        print(f"❌ File '{excel_file}' not found in current directory")
+        print(f"📁 Current directory: {os.getcwd()}")
+        print("📋 Excel files in current directory:")
+        for file in os.listdir('.'):
+            if file.endswith('.xlsx'):
+                print(f"   - {file}")
+        return
+    
+    # Show available columns
+    try:
+        df = pd.read_excel(excel_file)
+        print(f"\n📋 Available columns in your Excel file:")
+        for i, col in enumerate(df.columns, 1):
+            print(f"   {i}. {col}")
+    except Exception as e:
+        print(f"❌ Error reading file: {e}")
+        return
+    
+    # Get column name
+    link_column = input("\n🔗 Enter the exact name of your website link column: ").strip()
+    
+    # Run the generator
+    print(f"\n🚀 Processing your file...")
+    success = generate_qr_codes_for_publisher(excel_file, link_column)
+    
+    if success:
+        print("\n🎉 All done! Your QR codes are now sort/filter safe!")
+        print("\n💡 You can now safely sort or filter your Excel data in Publisher")
+        print("   and each record will still get its correct QR code!")
+
+# Run the script
+if __name__ == "__main__":
+    run_qr_generator()
