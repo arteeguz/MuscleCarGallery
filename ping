@@ -1,0 +1,147 @@
+1. ping – Check if a host is reachable.
+Sends test packets to a destination and measures the time to reply.
+Use case: Check if a website or device is up.
+
+-t – Ping continuously until stopped.
+
+-n [count] – Number of pings to send.
+
+-l [size] – Packet size to send.
+
+2. ipconfig (Windows) / ifconfig (Linux/macOS) – Show or configure network settings.
+Use case: View or reset your IP and network adapter details.
+Windows:
+
+/all – Show full config.
+
+/release – Release current IP.
+
+/renew – Request a new IP.
+
+Linux/macOS:
+
+up – Enable interface.
+
+down – Disable interface.
+
+[interface] – Show specific adapter (e.g., eth0).
+
+3. tracert / traceroute – Trace the route to a host.
+Shows each hop your data takes to reach a destination.
+Use case: Diagnose where traffic is slowing down.
+
+-d – Don’t resolve IPs to names.
+
+-h [max] – Max hops.
+
+-w [ms] – Timeout per hop.
+
+4. nslookup – DNS lookup tool.
+Queries DNS servers for IPs, mail records, etc.
+Use case: Diagnose domain resolution issues.
+
+set type=a – Get IP records.
+
+set type=mx – Get mail server info.
+
+server [DNS] – Use a specific DNS.
+
+5. netstat – View active network connections and ports.
+Use case: See what is using the network or listening for connections.
+
+-a – Show all connections and ports.
+
+-n – Don’t resolve names.
+
+-o – Show PID using each connection.
+
+6. arp – View or modify the ARP cache.
+Use case: Match IPs with MAC addresses on local network.
+
+-a – Display the ARP table.
+
+-d [ip] – Delete an entry.
+
+-s [ip] [mac] – Add a static entry.
+
+7. hostname – Show or set the computer name.
+Use case: Identify or refer to your machine in a network.
+
+-f – Fully qualified domain name (Linux).
+
+-i – IP address (Linux).
+
+(No common switches on Windows).
+
+8. whois – Check domain registration details.
+Use case: Find out who owns a website or when it expires.
+
+-h [server] – Use specific WHOIS server.
+
+-p [port] – Set port.
+
+[domain] – Target domain (not a flag but required).
+
+9. curl – Transfer data from/to a URL.
+Use case: Test APIs or download content.
+
+-I – Fetch headers only.
+
+-L – Follow redirects.
+
+-X [method] – Set request method (e.g., GET, POST).
+
+10. wget – Download files via command line.
+Use case: Scripted downloads or grabbing files remotely.
+
+-O [name] – Save as specific file.
+
+-q – Quiet mode.
+
+--limit-rate=[speed] – Throttle download.
+
+11. telnet – Connect to a remote host/port.
+Use case: Test if a port is open (e.g., SMTP on port 25).
+
+(Usage is just telnet host port)
+
+Access debug mode: Ctrl + ]
+
+Inside telnet: set, status
+
+12. ssh – Securely access remote machines.
+Use case: Administer servers securely over a network.
+
+-p [port] – Connect on a specific port.
+
+-i [file] – Use a specific key.
+
+-v – Verbose/debug mode.
+
+13. netsh (Windows) – Configure network settings.
+Use case: Reset adapters, firewall settings, etc.
+
+interface show interface – View interfaces.
+
+winsock reset – Reset Winsock catalog.
+
+int ip reset – Reset TCP/IP stack.
+
+14. route – View or modify routing table.
+Use case: See or control how traffic is routed.
+
+print – Show current routes.
+
+add [dest] mask [mask] [gateway] – Add route.
+
+delete [dest] – Remove a route.
+
+15. dig – Advanced DNS lookup tool.
+Use case: Detailed info about how domains resolve.
+
++short – Short, clean output.
+
+@dns – Use a specific DNS server.
+
+-t [type] – Specify record type (e.g., A, MX, TXT).
+
