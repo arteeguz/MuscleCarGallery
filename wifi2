@@ -3,70 +3,33 @@
 
 param(
     [string]$LogPath = "C:\RBFG\WiFi_Disabled\WiFi_Enable_Log.txt",
-    [string]$NetworkBackupPath = "\\netapp2b\WiFi_Disabled\WiFi_Enable_Log.txt"
+    [string]$NetworkLogPath = "\\netapp2b\WiFi_Disabled\WiFi_Enable_Log.txt"
 )
 
 # Interactive hostname input
 Write-Host "=== WiFi Adapter Re-enable Tool ===" -ForegroundColor Green
 Write-Host ""
-Write-Host "Choose input method:" -ForegroundColor Yellow
-Write-Host "1. Paste multiple hostnames at once (recommended)" -ForegroundColor Cyan
-Write-Host "2. Enter hostnames one by one" -ForegroundColor Cyan
+Write-Host "Paste hostnames to re-enable WiFi (one per line)." -ForegroundColor Yellow
+Write-Host "Press Enter after pasting, then type 'DONE' and press Enter:" -ForegroundColor Yellow
 Write-Host ""
 
-$choice = Read-Host "Select method (1 or 2)"
 $HostNames = @()
+$allInput = @()
 
-if ($choice -eq "1") {
-    Write-Host ""
-    Write-Host "Paste all hostnames below and press Ctrl+Z then Enter when finished:" -ForegroundColor Yellow
-    Write-Host "Example:" -ForegroundColor Gray
-    Write-Host "P3TINY-001" -ForegroundColor Gray
-    Write-Host "P3TINY-002" -ForegroundColor Gray
-    Write-Host "P3ULTRA-003" -ForegroundColor Gray
-    Write-Host "Then press Ctrl+Z and Enter" -ForegroundColor Gray
-    Write-Host ""
-    
-    # Use Get-Content to read from console input
-    $input = @()
-    try {
-        $input = @(Get-Content)
-    } catch {
-        # If Ctrl+Z method doesn't work, fallback to manual entry
-        Write-Host "Ctrl+Z method not available. Please enter hostnames one by one:" -ForegroundColor Yellow
-        do {
-            $line = Read-Host "Hostname (or press Enter to finish)"
-            if ($line -ne "") {
-                $input += $line
-            }
-        } while ($line -ne "")
+# Read all input lines until user types DONE
+do {
+    $inputLine = Read-Host
+    if ($inputLine.ToUpper() -ne "DONE") {
+        $allInput += $inputLine
     }
-    
-    $HostNames = $input | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" }
-    
-    if ($HostNames.Count -gt 0) {
-        Write-Host ""
-        Write-Host "Captured hostnames:" -ForegroundColor Green
-        $HostNames | ForEach-Object { Write-Host "  - $_" -ForegroundColor Cyan }
+} while ($inputLine.ToUpper() -ne "DONE")
+
+# Process all input lines and extract hostnames
+foreach ($line in $allInput) {
+    if ($line.Trim() -ne "") {
+        $HostNames += $line.Trim()
+        Write-Host "Added: $($line.Trim())" -ForegroundColor Cyan
     }
-    
-} else {
-    # Original one-by-one method
-    Write-Host ""
-    Write-Host "Enter hostnames one by one (press Enter twice to finish):" -ForegroundColor Yellow
-    Write-Host ""
-    
-    $emptyLineCount = 0
-    do {
-        $inputLine = Read-Host "Hostname"
-        if ($inputLine -eq "") {
-            $emptyLineCount++
-        } else {
-            $emptyLineCount = 0
-            $HostNames += $inputLine.Trim()
-            Write-Host "Added: $($inputLine.Trim())" -ForegroundColor Cyan
-        }
-    } while ($emptyLineCount -lt 2)
 }
 
 if ($HostNames.Count -eq 0) {
@@ -97,9 +60,9 @@ function Write-Log {
     
     # Write to network backup log
     try {
-        Add-Content -Path $NetworkBackupPath -Value $logEntry
+        Add-Content -Path $NetworkLogPath -Value $logEntry -ErrorAction SilentlyContinue
     } catch {
-        Write-Host "Warning: Could not write to network backup log: $($_.Exception.Message)" -ForegroundColor Yellow
+        # If network write fails, continue without stopping
     }
 }
 
@@ -109,14 +72,15 @@ if (!(Test-Path $logDir)) {
     New-Item -ItemType Directory -Path $logDir -Force
 }
 
-$networkLogDir = Split-Path $NetworkBackupPath -Parent
+# Create network log directory if it doesn't exist
+$networkLogDir = Split-Path $NetworkLogPath -Parent
 try {
     if (!(Test-Path $networkLogDir)) {
-        New-Item -ItemType Directory -Path $networkLogDir -Force
+        New-Item -ItemType Directory -Path $networkLogDir -Force -ErrorAction SilentlyContinue
     }
 } catch {
-    Write-Host "Warning: Could not create network backup directory: $($_.Exception.Message)" -ForegroundColor Yellow
-    Write-Host "Network backup logging will be skipped." -ForegroundColor Yellow
+    # If network directory creation fails, continue without stopping
+    Write-Host "Warning: Could not create network log directory. Network logging may fail." -ForegroundColor Yellow
 }
 
 Write-Log "Starting WiFi adapter re-enable operation"
@@ -210,12 +174,5 @@ Write-Log "WiFi adapter re-enable operation completed"
 # Example usage:
 # .\EnableWiFi.ps1
 # 
-# Paste multiple hostnames like:
-# P3TINY-001
-# P3TINY-002
-# P3ULTRA-003
-# [Press Enter twice to finish]
-#
-# Logs are saved to both:
-# - Local: C:\RBFG\WiFi_Disabled\WiFi_Enable_Log.txt  
-# - Network: \\netapp2b\WiFi_Disabled\WiFi_Enable_Log.txt
+# The script will prompt you to paste hostnames in bulk (one per line).
+# Logs are saved to both local (C:\RBFG\WiFi_Disabled\) and network (\\netapp2b\WiFi_Disabled\) locations.
