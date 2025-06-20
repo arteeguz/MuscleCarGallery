@@ -2,7 +2,8 @@
 # Run as Administrator
 
 param(
-    [string]$LogPath = "C:\Logs\WiFi_Disable_Log.txt"
+    [string]$LogPath = "C:\RBFG\WiFi_Disabled\WiFi_Disable_Log.txt",
+    [string]$NetworkBackupPath = "\\netapp2b\WiFi_Disabled\WiFi_Disable_Log.txt"
 )
 
 # Interactive hostname input
@@ -45,13 +46,32 @@ function Write-Log {
     $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     $logEntry = "$timestamp - $Message"
     Write-Host $logEntry
+    
+    # Write to local log
     Add-Content -Path $LogPath -Value $logEntry
+    
+    # Write to network backup log (with error handling)
+    try {
+        Add-Content -Path $NetworkBackupPath -Value $logEntry -ErrorAction Stop
+    } catch {
+        Write-Host "Warning: Failed to write to network backup log: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
 }
 
 # Create log directory if it doesn't exist
 $logDir = Split-Path $LogPath -Parent
 if (!(Test-Path $logDir)) {
     New-Item -ItemType Directory -Path $logDir -Force
+}
+
+# Create network backup directory if it doesn't exist
+try {
+    $networkLogDir = Split-Path $NetworkBackupPath -Parent
+    if (!(Test-Path $networkLogDir)) {
+        New-Item -ItemType Directory -Path $networkLogDir -Force
+    }
+} catch {
+    Write-Host "Warning: Failed to create network backup directory: $($_.Exception.Message)" -ForegroundColor Yellow
 }
 
 Write-Log "Starting WiFi adapter disable operation"
@@ -166,5 +186,5 @@ $summary.GetEnumerator() | ForEach-Object { Write-Log "$($_.Key): $($_.Value)" }
 # The script will prompt you to enter hostnames interactively.
 # Just run the script and follow the prompts!
 #
-# Optional: Custom log path
-# .\DisableWiFi.ps1 -LogPath "C:\MyLogs\wifi_disable.txt"
+# Optional: Custom log paths
+# .\DisableWiFi.ps1 -LogPath "C:\RBFG\WiFi_Disabled\custom_log.txt" -NetworkBackupPath "\\netapp2b\WiFi_Disabled\custom_backup.txt"
