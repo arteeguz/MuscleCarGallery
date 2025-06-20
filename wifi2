@@ -1,52 +1,13 @@
-# WiFi Adapter Re-enable Script
+# WiFi Adapter Disable Script for Lenovo Corporate Assets
 # Run as Administrator
 
 param(
-    [string]$LogPath = "C:\RBFG\WiFi_Disabled\WiFi_Enable_Log.txt",
-    [string]$NetworkLogPath = "\\netapp2b\WiFi_Disabled\WiFi_Enable_Log.txt"
+    [Parameter(Mandatory=$true)]
+    [string[]]$HostNames,
+    
+    [string]$LogPath = "C:\RBFG\WiFi_Disabled\WiFi_Disable_Log.txt",
+    [string]$NetworkBackupPath = "\\netapp2b\WiFi_Disabled\WiFi_Disable_Log.txt"
 )
-
-# Interactive hostname input
-Write-Host "=== WiFi Adapter Re-enable Tool ===" -ForegroundColor Green
-Write-Host ""
-Write-Host "Paste hostnames to re-enable WiFi (one per line)." -ForegroundColor Yellow
-Write-Host "Press Enter after pasting, then type 'DONE' and press Enter:" -ForegroundColor Yellow
-Write-Host ""
-
-$HostNames = @()
-$allInput = @()
-
-# Read all input lines until user types DONE
-do {
-    $inputLine = Read-Host
-    if ($inputLine.ToUpper() -ne "DONE") {
-        $allInput += $inputLine
-    }
-} while ($inputLine.ToUpper() -ne "DONE")
-
-# Process all input lines and extract hostnames
-foreach ($line in $allInput) {
-    if ($line.Trim() -ne "") {
-        $HostNames += $line.Trim()
-        Write-Host "Added: $($line.Trim())" -ForegroundColor Cyan
-    }
-}
-
-if ($HostNames.Count -eq 0) {
-    Write-Host "No hostnames provided. Exiting." -ForegroundColor Red
-    exit
-}
-
-Write-Host ""
-Write-Host "Re-enabling WiFi on $($HostNames.Count) computer(s):" -ForegroundColor Green
-$HostNames | ForEach-Object { Write-Host "  - $_" -ForegroundColor White }
-Write-Host ""
-
-$continue = Read-Host "Continue? (Y/N)"
-if ($continue.ToUpper() -ne "Y") {
-    Write-Host "Operation cancelled." -ForegroundColor Yellow
-    exit
-}
 
 # Function to log results
 function Write-Log {
@@ -54,36 +15,33 @@ function Write-Log {
     $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     $logEntry = "$timestamp - $Message"
     Write-Host $logEntry
-    
-    # Write to local log
     Add-Content -Path $LogPath -Value $logEntry
     
     # Write to network backup log
     try {
-        Add-Content -Path $NetworkLogPath -Value $logEntry -ErrorAction SilentlyContinue
+        Add-Content -Path $NetworkBackupPath -Value $logEntry
     } catch {
-        # If network write fails, continue without stopping
+        # Silently continue if network backup fails
     }
 }
 
-# Create log directories if they don't exist
+# Create log directory if it doesn't exist
 $logDir = Split-Path $LogPath -Parent
 if (!(Test-Path $logDir)) {
     New-Item -ItemType Directory -Path $logDir -Force
 }
 
-# Create network log directory if it doesn't exist
-$networkLogDir = Split-Path $NetworkLogPath -Parent
+# Create network backup directory if it doesn't exist
+$networkLogDir = Split-Path $NetworkBackupPath -Parent
 try {
     if (!(Test-Path $networkLogDir)) {
-        New-Item -ItemType Directory -Path $networkLogDir -Force -ErrorAction SilentlyContinue
+        New-Item -ItemType Directory -Path $networkLogDir -Force
     }
 } catch {
-    # If network directory creation fails, continue without stopping
-    Write-Host "Warning: Could not create network log directory. Network logging may fail." -ForegroundColor Yellow
+    # Silently continue if network directory creation fails
 }
 
-Write-Log "Starting WiFi adapter re-enable operation"
+Write-Log "Starting WiFi adapter disable operation"
 
 foreach ($hostname in $HostNames) {
     Write-Log "Processing: $hostname"
@@ -96,24 +54,27 @@ foreach ($hostname in $HostNames) {
             # Method 1: Using Get-NetAdapter (Windows 8/Server 2012+)
             $result = Invoke-Command -ComputerName $hostname -ScriptBlock {
                 try {
-                    # Get disabled WiFi adapters
+                    # Get WiFi adapters
                     $wifiAdapters = Get-NetAdapter | Where-Object { 
-                        ($_.InterfaceDescription -like "*wireless*" -or 
+                        $_.InterfaceDescription -like "*wireless*" -or 
                         $_.InterfaceDescription -like "*wifi*" -or 
                         $_.InterfaceDescription -like "*802.11*" -or
                         $_.Name -like "*Wi-Fi*" -or
-                        $_.Name -like "*Wireless*") -and
-                        $_.Status -eq "Disabled"
+                        $_.Name -like "*Wireless*"
                     }
                     
                     $results = @()
                     foreach ($adapter in $wifiAdapters) {
-                        Enable-NetAdapter -Name $adapter.Name -Confirm:$false
-                        $results += "Enabled: $($adapter.Name) - $($adapter.InterfaceDescription)"
+                        if ($adapter.Status -eq "Up" -or $adapter.AdminStatus -eq "Up") {
+                            Disable-NetAdapter -Name $adapter.Name -Confirm:$false
+                            $results += "Disabled: $($adapter.Name) - $($adapter.InterfaceDescription)"
+                        } else {
+                            $results += "Already disabled: $($adapter.Name) - $($adapter.InterfaceDescription)"
+                        }
                     }
                     
                     if ($results.Count -eq 0) {
-                        return "No disabled WiFi adapters found"
+                        return "No WiFi adapters found"
                     } else {
                         return $results -join "; "
                     }
@@ -138,21 +99,24 @@ foreach ($hostname in $HostNames) {
             $wmiResult = Invoke-Command -ComputerName $hostname -ScriptBlock {
                 try {
                     $adapters = Get-WmiObject -Class Win32_NetworkAdapter | Where-Object { 
-                        ($_.Name -like "*wireless*" -or 
+                        $_.Name -like "*wireless*" -or 
                         $_.Name -like "*wifi*" -or 
                         $_.Name -like "*802.11*" -or
-                        $_.AdapterType -like "*wireless*") -and
-                        $_.NetEnabled -eq $false
+                        $_.AdapterType -like "*wireless*"
                     }
                     
                     $results = @()
                     foreach ($adapter in $adapters) {
-                        $adapter.Enable()
-                        $results += "Enabled via WMI: $($adapter.Name)"
+                        if ($adapter.NetEnabled -eq $true) {
+                            $adapter.Disable()
+                            $results += "Disabled via WMI: $($adapter.Name)"
+                        } else {
+                            $results += "Already disabled via WMI: $($adapter.Name)"
+                        }
                     }
                     
                     if ($results.Count -eq 0) {
-                        return "No disabled WiFi adapters found via WMI"
+                        return "No WiFi adapters found via WMI"
                     } else {
                         return $results -join "; "
                     }
@@ -169,10 +133,23 @@ foreach ($hostname in $HostNames) {
     }
 }
 
-Write-Log "WiFi adapter re-enable operation completed"
+Write-Log "WiFi adapter disable operation completed"
+
+# Optional: Generate summary report
+$logContent = Get-Content $LogPath
+$summary = @{
+    "Total Hosts" = $HostNames.Count
+    "Reachable" = ($logContent | Select-String "is reachable").Count
+    "Unreachable" = ($logContent | Select-String "is not reachable").Count
+    "Errors" = ($logContent | Select-String "Error:").Count
+}
+
+Write-Log "=== SUMMARY ==="
+$summary.GetEnumerator() | ForEach-Object { Write-Log "$($_.Key): $($_.Value)" }
 
 # Example usage:
-# .\EnableWiFi.ps1
+# .\DisableWiFi.ps1 -HostNames @("PC001", "PC002", "PC003")
 # 
-# The script will prompt you to paste hostnames in bulk (one per line).
-# Logs are saved to both local (C:\RBFG\WiFi_Disabled\) and network (\\netapp2b\WiFi_Disabled\) locations.
+# Or from a text file:
+# $computers = Get-Content "C:\hostnames.txt"
+# .\DisableWiFi.ps1 -HostNames $computers
