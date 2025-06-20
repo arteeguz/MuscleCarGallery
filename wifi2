@@ -2,12 +2,42 @@
 # Run as Administrator
 
 param(
-    [Parameter(Mandatory=$true)]
-    [string[]]$HostNames,
-    
-    [string]$LogPath = "C:\RBFG\WiFi_Disabled\WiFi_Disable_Log.txt",
-    [string]$NetworkBackupPath = "\\netapp2b\WiFi_Disabled\WiFi_Disable_Log.txt"
+    [string]$LogPath = "C:\Logs\WiFi_Disable_Log.txt"
 )
+
+# Interactive hostname input
+Write-Host "=== WiFi Adapter Disable Tool ===" -ForegroundColor Green
+Write-Host ""
+Write-Host "Enter hostnames (one per line)." -ForegroundColor Yellow
+Write-Host "Press Enter twice when finished, or type 'DONE' and press Enter:" -ForegroundColor Yellow
+Write-Host ""
+
+$HostNames = @()
+$inputLine = ""
+
+do {
+    $inputLine = Read-Host "Hostname"
+    if ($inputLine -ne "" -and $inputLine.ToUpper() -ne "DONE") {
+        $HostNames += $inputLine.Trim()
+        Write-Host "Added: $($inputLine.Trim())" -ForegroundColor Cyan
+    }
+} while ($inputLine -ne "" -and $inputLine.ToUpper() -ne "DONE")
+
+if ($HostNames.Count -eq 0) {
+    Write-Host "No hostnames provided. Exiting." -ForegroundColor Red
+    exit
+}
+
+Write-Host ""
+Write-Host "Processing $($HostNames.Count) computer(s):" -ForegroundColor Green
+$HostNames | ForEach-Object { Write-Host "  - $_" -ForegroundColor White }
+Write-Host ""
+
+$continue = Read-Host "Continue? (Y/N)"
+if ($continue.ToUpper() -ne "Y") {
+    Write-Host "Operation cancelled." -ForegroundColor Yellow
+    exit
+}
 
 # Function to log results
 function Write-Log {
@@ -16,29 +46,12 @@ function Write-Log {
     $logEntry = "$timestamp - $Message"
     Write-Host $logEntry
     Add-Content -Path $LogPath -Value $logEntry
-    
-    # Write to network backup log
-    try {
-        Add-Content -Path $NetworkBackupPath -Value $logEntry
-    } catch {
-        # Silently continue if network backup fails
-    }
 }
 
 # Create log directory if it doesn't exist
 $logDir = Split-Path $LogPath -Parent
 if (!(Test-Path $logDir)) {
     New-Item -ItemType Directory -Path $logDir -Force
-}
-
-# Create network backup directory if it doesn't exist
-$networkLogDir = Split-Path $NetworkBackupPath -Parent
-try {
-    if (!(Test-Path $networkLogDir)) {
-        New-Item -ItemType Directory -Path $networkLogDir -Force
-    }
-} catch {
-    # Silently continue if network directory creation fails
 }
 
 Write-Log "Starting WiFi adapter disable operation"
@@ -148,8 +161,10 @@ Write-Log "=== SUMMARY ==="
 $summary.GetEnumerator() | ForEach-Object { Write-Log "$($_.Key): $($_.Value)" }
 
 # Example usage:
-# .\DisableWiFi.ps1 -HostNames @("PC001", "PC002", "PC003")
+# .\DisableWiFi.ps1
 # 
-# Or from a text file:
-# $computers = Get-Content "C:\hostnames.txt"
-# .\DisableWiFi.ps1 -HostNames $computers
+# The script will prompt you to enter hostnames interactively.
+# Just run the script and follow the prompts!
+#
+# Optional: Custom log path
+# .\DisableWiFi.ps1 -LogPath "C:\MyLogs\wifi_disable.txt"
