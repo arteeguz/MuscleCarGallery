@@ -1,0 +1,1 @@
+robocopy "C:\BIOSUpdate" "\\COMPUTERNAME\C$\temp\BIOSUpdate" /E /Z /R:3 /W:5
