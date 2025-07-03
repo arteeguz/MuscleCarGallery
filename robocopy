@@ -1,1 +1,7 @@
 robocopy "C:\BIOSUpdate" "\\COMPUTERNAME\C$\temp\BIOSUpdate" /E /Z /R:3 /W:5
+
+
+Option A - Run the EXE directly:
+cmdC:\temp\BIOSUpdate\r2luj33w(1).exe
+Option B - Use the PowerShell script:
+powershellC:\temp\BIOSUpdate\Invoke-LenovoUEFIUpdate.ps1
