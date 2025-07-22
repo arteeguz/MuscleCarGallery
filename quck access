@@ -1,2 +1,4 @@
 # Run on target computer (replace SOURCEPC with actual computer name)
 robocopy "\\SOURCEPC\c$\Users\USERNAME\AppData\Roaming\Microsoft\Windows\Recent" "$env:APPDATA\Microsoft\Windows\Recent" /E /XF *.lnk
+
+robocopy "\\SOURCEPC\c$\Users\USERNAME\3D Objects" "%USERPROFILE%\3D Objects" /E
