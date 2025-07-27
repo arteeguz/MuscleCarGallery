@@ -26,3 +26,10 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
 EOF
+
+
+cat > .env << 'EOF'
+PORT=3000
+MONGODB_URI=mongodb://localhost:27017/office_space_poc
+NODE_ENV=development
+EOF
