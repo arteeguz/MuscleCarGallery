@@ -1,0 +1,18 @@
+Log Entry Example:
+{
+  "_id": ObjectId("..."),
+  "timestamp": ISODate("2025-01-20T14:30:00Z"),
+  "level": "INFO",
+  "category": "USER_ACTION",
+  "userId": "12345",
+  "action": "SEAT_ASSIGNMENT",
+  "details": {
+    "seatId": "A-301",
+    "previousOccupant": null,
+    "newOccupant": "45678",
+    "reason": "New hire"
+  },
+  "ip": "10.0.0.50",
+  "userAgent": "Mozilla/5.0...",
+  "sessionId": "sess_abc123"
+}
