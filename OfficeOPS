@@ -1,0 +1,4112 @@
+Great! Since you've verified the prerequisites, let's create the Office Space Management project from scratch on your MacBook.
+Creating the Project from Scratch
+Step 1: Create Project Directory Structure
+bash# Create main project directory
+mkdir office-space-management
+cd office-space-management
+
+# Create backend and frontend directories
+mkdir backend
+mkdir frontend
+Step 2: Initialize Backend
+bash# Navigate to backend directory
+cd backend
+
+# Initialize Node.js project
+npm init -y
+
+# Install backend dependencies
+npm install express mongoose dotenv cors
+npm install multer exceljs
+npm install -D nodemon
+
+# Create backend directory structure
+mkdir -p src/{controllers,models,routes,services,utils}
+
+# Create main server file
+touch server.js
+
+# Create .env file
+touch .env
+Step 3: Set Up Basic Backend Files
+Create backend/server.js:
+bashcat > server.js << 'EOF'
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+require('dotenv').config();
+
+const app = express();
+
+// Middleware
+app.use(cors());
+app.use(express.json());
+
+// MongoDB Connection
+mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/office_space_poc')
+  .then(() => console.log('MongoDB connected'))
+  .catch(err => console.error('MongoDB connection error:', err));
+
+// Basic route
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'OK', message: 'Office Space Management API is running' });
+});
+
+// Server
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
+EOF
+Update backend/.env:
+bashcat > .env << 'EOF'
+PORT=3000
+MONGODB_URI=mongodb://localhost:27017/office_space_poc
+NODE_ENV=development
+EOF
+Update backend/package.json to add scripts:
+bash# Open package.json and update the "scripts" section
+npm pkg set scripts.start="node server.js"
+npm pkg set scripts.dev="nodemon server.js"
+Step 4: Create Basic Models
+Create Employee model:
+bashcat > src/models/Employee.js << 'EOF'
+const mongoose = require('mongoose');
+
+const employeeSchema = new mongoose.Schema({
+  employeeNumber: {
+    type: String,
+    required: true,
+    unique: true
+  },
+  firstName: {
+    type: String,
+    required: true
+  },
+  lastName: {
+    type: String,
+    required: true
+  },
+  email: String,
+  businessGroup: String,
+  department: String,
+  transitNumber: String,
+  status: {
+    type: String,
+    enum: ['active', 'inactive'],
+    default: 'active'
+  }
+}, {
+  timestamps: true
+});
+
+module.exports = mongoose.model('Employee', employeeSchema);
+EOF
+Create Seat model:
+bashcat > src/models/Seat.js << 'EOF'
+const mongoose = require('mongoose');
+
+const seatSchema = new mongoose.Schema({
+  seatId: {
+    type: String,
+    required: true,
+    unique: true
+  },
+  building: String,
+  floor: Number,
+  status: {
+    type: String,
+    enum: ['occupied', 'vacant'],
+    default: 'vacant'
+  },
+  currentOccupant: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Employee',
+    default: null
+  },
+  updatedBy: {
+    type: String,
+    default: 'system'
+  }
+}, {
+  timestamps: true
+});
+
+module.exports = mongoose.model('Seat', seatSchema);
+EOF
+Step 5: Initialize Frontend
+bash# Go back to main project directory
+cd ..
+
+# Create React app
+npx create-react-app frontend
+
+# Navigate to frontend
+cd frontend
+
+# Install additional frontend dependencies
+npm install axios react-router-dom
+
+# Clean up default React files
+rm src/App.test.js src/logo.svg src/setupTests.js
+
+# Create frontend directory structure
+mkdir -p src/{components,pages,services,utils}
+
+# Create .env file
+touch .env
+Update frontend/.env:
+bashcat > .env << 'EOF'
+REACT_APP_API_URL=http://localhost:3000/api
+EOF
+Step 6: Create Basic Frontend Files
+Create API service:
+bashcat > src/services/api.js << 'EOF'
+import axios from 'axios';
+
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000/api';
+
+const api = axios.create({
+  baseURL: API_URL,
+});
+
+export default api;
+EOF
+Update frontend/src/App.js:
+bashcat > src/App.js << 'EOF'
+import React, { useEffect, useState } from 'react';
+import './App.css';
+import api from './services/api';
+
+function App() {
+  const [health, setHealth] = useState(null);
+
+  useEffect(() => {
+    // Test API connection
+    api.get('/health')
+      .then(response => setHealth(response.data))
+      .catch(error => console.error('API Error:', error));
+  }, []);
+
+  return (
+    <div className="App">
+      <header className="App-header">
+        <h1>Office Space Management System</h1>
+        <p>POC Version</p>
+        {health && <p>API Status: {health.status}</p>}
+      </header>
+    </div>
+  );
+}
+
+export default App;
+EOF
+Update frontend/src/App.css:
+bashcat > src/App.css << 'EOF'
+.App {
+  text-align: center;
+}
+
+.App-header {
+  background-color: #282c34;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(10px + 2vmin);
+  color: white;
+}
+EOF
+Step 7: Start the Development Environment
+Open Terminal 1 for Backend:
+bash# Make sure MongoDB is running
+brew services start mongodb-community
+
+# Navigate to backend
+cd ~/office-space-management/backend
+
+# Start backend server
+npm run dev
+
+# You should see:
+# Server running on port 3000
+# MongoDB connected
+Open Terminal 2 for Frontend:
+bash# Navigate to frontend
+cd ~/office-space-management/frontend
+
+# Start frontend
+npm start
+
+# This will open http://localhost:3001 in your browser
+# You should see the Office Space Management System header
+# And "API Status: OK" if backend is connected
+Step 8: Verify Everything is Working
+
+Backend API: Visit http://localhost:3000/api/health in your browser
+
+Should show: {"status":"OK","message":"Office Space Management API is running"}
+
+
+Frontend: Visit http://localhost:3001
+
+Should show the app with "API Status: OK"
+
+
+MongoDB: In a new terminal, check MongoDB:
+bashmongosh
+use office_space_poc
+show collections
+
+
+Project Structure You Now Have:
+office-space-management/
+├── backend/
+│   ├── node_modules/
+│   ├── src/
+│   │   ├── controllers/
+│   │   ├── models/
+│   │   │   ├── Employee.js
+│   │   │   └── Seat.js
+│   │   ├── routes/
+│   │   ├── services/
+│   │   └── utils/
+│   ├── .env
+│   ├── package.json
+│   ├── package-lock.json
+│   └── server.js
+└── frontend/
+    ├── node_modules/
+    ├── public/
+    ├── src/
+    │   ├── components/
+    │   ├── pages/
+    │   ├── services/
+    │   │   └── api.js
+    │   ├── utils/
+    │   ├── App.css
+    │   ├── App.js
+    │   └── index.js
+    ├── .env
+    ├── package.json
+    └── package-lock.json
+Next Steps:
+
+Create routes for seat management in backend
+Build UI components for seat display in frontend
+Add Excel import functionality
+Create reporting features
+
+You now have a working foundation for the Office Space Management POC! Both frontend and backend are connected and ready for feature development.RetryAGLet's start coding, let's implement POCEditMapped out POC strategy with backend and frontend roadmap.6sThe user wants to start implementing the POC. Based on our earlier discussions, the POC should include:
+
+Seat Management: Assign, move, or vacate seats with validation
+Excel Import/Export: Initial data import and ongoing bulk updates with conflict resolution
+Reporting: Generate reports by business group, floor, and department
+Audit Trail: Complete history of all seat assignments and changes
+No Authentication for POC
+
+Let's start with the backend first, building the core functionality:
+
+Complete the models (we already have Employee and Seat)
+Create routes and controllers for CRUD operations
+Add Excel import/export functionality
+Add reporting endpoints
+
+Then we'll build the frontend to interact with these APIs.
+I'll start with backend implementation.Great! Let's implement the POC step by step. We'll start with the backend, then build the frontend.
+Backend Implementation
+Step 1: Complete the Models
+First, let's add the AssignmentHistory model:
+bashcd ~/office-space-management/backend
+Create src/models/AssignmentHistory.js:
+javascriptcat > src/models/AssignmentHistory.js << 'EOF'
+const mongoose = require('mongoose');
+
+const assignmentHistorySchema = new mongoose.Schema({
+  employeeId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Employee',
+    required: true
+  },
+  seatId: {
+    type: String,
+    required: true
+  },
+  action: {
+    type: String,
+    enum: ['assigned', 'moved', 'vacated'],
+    required: true
+  },
+  startDate: {
+    type: Date,
+    default: Date.now
+  },
+  endDate: {
+    type: Date,
+    default: null
+  },
+  previousSeat: String,
+  assignedBy: {
+    type: String,
+    default: 'system'
+  },
+  reason: String
+}, {
+  timestamps: true
+});
+
+module.exports = mongoose.model('AssignmentHistory', assignmentHistorySchema);
+EOF
+Create src/models/ImportSession.js:
+javascriptcat > src/models/ImportSession.js << 'EOF'
+const mongoose = require('mongoose');
+
+const importSessionSchema = new mongoose.Schema({
+  sessionId: String,
+  fileName: String,
+  importDate: {
+    type: Date,
+    default: Date.now
+  },
+  recordsProcessed: Number,
+  recordsSuccess: Number,
+  recordsFailed: Number,
+  mappingsUsed: Object,
+  conflicts: Array,
+  errors: Array
+}, {
+  timestamps: true
+});
+
+module.exports = mongoose.model('ImportSession', importSessionSchema);
+EOF
+Step 2: Create Routes and Controllers
+Create src/routes/seatRoutes.js:
+javascriptcat > src/routes/seatRoutes.js << 'EOF'
+const express = require('express');
+const router = express.Router();
+const seatController = require('../controllers/seatController');
+
+// Get all seats with filters
+router.get('/', seatController.getAllSeats);
+
+// Get single seat
+router.get('/:seatId', seatController.getSeat);
+
+// Assign employee to seat
+router.put('/:seatId/assign', seatController.assignSeat);
+
+// Vacate seat
+router.put('/:seatId/vacate', seatController.vacateSeat);
+
+// Move employee to different seat
+router.post('/move', seatController.moveEmployee);
+
+module.exports = router;
+EOF
+Create src/controllers/seatController.js:
+javascriptcat > src/controllers/seatController.js << 'EOF'
+const Seat = require('../models/Seat');
+const Employee = require('../models/Employee');
+const AssignmentHistory = require('../models/AssignmentHistory');
+
+// Get all seats with optional filters
+exports.getAllSeats = async (req, res) => {
+  try {
+    const { floor, status, building } = req.query;
+    const filter = {};
+    
+    if (floor) filter.floor = parseInt(floor);
+    if (status) filter.status = status;
+    if (building) filter.building = building;
+    
+    const seats = await Seat.find(filter)
+      .populate('currentOccupant', 'employeeNumber firstName lastName department businessGroup')
+      .sort('seatId');
+    
+    res.json({
+      success: true,
+      count: seats.length,
+      seats
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// Get single seat
+exports.getSeat = async (req, res) => {
+  try {
+    const seat = await Seat.findOne({ seatId: req.params.seatId })
+      .populate('currentOccupant');
+    
+    if (!seat) {
+      return res.status(404).json({ success: false, error: 'Seat not found' });
+    }
+    
+    res.json({ success: true, seat });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// Assign employee to seat
+exports.assignSeat = async (req, res) => {
+  try {
+    const { seatId } = req.params;
+    const { employeeId } = req.body;
+    
+    // Validate seat exists and is vacant
+    const seat = await Seat.findOne({ seatId });
+    if (!seat) {
+      return res.status(404).json({ success: false, error: 'Seat not found' });
+    }
+    if (seat.status === 'occupied') {
+      return res.status(400).json({ success: false, error: 'Seat is already occupied' });
+    }
+    
+    // Validate employee exists
+    const employee = await Employee.findById(employeeId);
+    if (!employee) {
+      return res.status(404).json({ success: false, error: 'Employee not found' });
+    }
+    
+    // Check if employee already has a seat
+    const currentSeat = await Seat.findOne({ currentOccupant: employeeId });
+    if (currentSeat) {
+      return res.status(400).json({ 
+        success: false, 
+        error: `Employee already assigned to seat ${currentSeat.seatId}` 
+      });
+    }
+    
+    // Assign seat
+    seat.currentOccupant = employeeId;
+    seat.status = 'occupied';
+    seat.updatedBy = 'system';
+    await seat.save();
+    
+    // Create history record
+    await AssignmentHistory.create({
+      employeeId,
+      seatId,
+      action: 'assigned',
+      assignedBy: 'system'
+    });
+    
+    const updatedSeat = await Seat.findOne({ seatId }).populate('currentOccupant');
+    res.json({ success: true, seat: updatedSeat });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// Vacate seat
+exports.vacateSeat = async (req, res) => {
+  try {
+    const { seatId } = req.params;
+    
+    const seat = await Seat.findOne({ seatId });
+    if (!seat) {
+      return res.status(404).json({ success: false, error: 'Seat not found' });
+    }
+    if (seat.status === 'vacant') {
+      return res.status(400).json({ success: false, error: 'Seat is already vacant' });
+    }
+    
+    // Update history
+    await AssignmentHistory.findOneAndUpdate(
+      { employeeId: seat.currentOccupant, seatId, endDate: null },
+      { endDate: new Date() }
+    );
+    
+    // Create vacate record
+    await AssignmentHistory.create({
+      employeeId: seat.currentOccupant,
+      seatId,
+      action: 'vacated',
+      assignedBy: 'system'
+    });
+    
+    // Vacate seat
+    seat.currentOccupant = null;
+    seat.status = 'vacant';
+    seat.updatedBy = 'system';
+    await seat.save();
+    
+    res.json({ success: true, seat });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// Move employee to different seat
+exports.moveEmployee = async (req, res) => {
+  try {
+    const { employeeId, fromSeatId, toSeatId } = req.body;
+    
+    // Validate employee
+    const employee = await Employee.findById(employeeId);
+    if (!employee) {
+      return res.status(404).json({ success: false, error: 'Employee not found' });
+    }
+    
+    // Validate seats
+    const fromSeat = await Seat.findOne({ seatId: fromSeatId });
+    const toSeat = await Seat.findOne({ seatId: toSeatId });
+    
+    if (!fromSeat || !toSeat) {
+      return res.status(404).json({ success: false, error: 'Seat not found' });
+    }
+    
+    if (toSeat.status === 'occupied') {
+      return res.status(400).json({ success: false, error: 'Target seat is occupied' });
+    }
+    
+    // Perform move
+    fromSeat.currentOccupant = null;
+    fromSeat.status = 'vacant';
+    await fromSeat.save();
+    
+    toSeat.currentOccupant = employeeId;
+    toSeat.status = 'occupied';
+    await toSeat.save();
+    
+    // Update history
+    await AssignmentHistory.findOneAndUpdate(
+      { employeeId, seatId: fromSeatId, endDate: null },
+      { endDate: new Date() }
+    );
+    
+    await AssignmentHistory.create({
+      employeeId,
+      seatId: toSeatId,
+      action: 'moved',
+      previousSeat: fromSeatId,
+      assignedBy: 'system'
+    });
+    
+    res.json({ 
+      success: true, 
+      message: `Employee moved from ${fromSeatId} to ${toSeatId}` 
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+EOF
+Step 3: Create Employee Routes
+Create src/routes/employeeRoutes.js:
+javascriptcat > src/routes/employeeRoutes.js << 'EOF'
+const express = require('express');
+const router = express.Router();
+const employeeController = require('../controllers/employeeController');
+
+router.get('/', employeeController.getAllEmployees);
+router.get('/:id', employeeController.getEmployee);
+router.post('/', employeeController.createEmployee);
+router.put('/:id', employeeController.updateEmployee);
+
+module.exports = router;
+EOF
+Create src/controllers/employeeController.js:
+javascriptcat > src/controllers/employeeController.js << 'EOF'
+const Employee = require('../models/Employee');
+const Seat = require('../models/Seat');
+
+exports.getAllEmployees = async (req, res) => {
+  try {
+    const { businessGroup, department, status } = req.query;
+    const filter = {};
+    
+    if (businessGroup) filter.businessGroup = businessGroup;
+    if (department) filter.department = department;
+    if (status) filter.status = status;
+    
+    const employees = await Employee.find(filter).sort('employeeNumber');
+    
+    // Add current seat info
+    const employeesWithSeats = await Promise.all(
+      employees.map(async (emp) => {
+        const seat = await Seat.findOne({ currentOccupant: emp._id });
+        return {
+          ...emp.toObject(),
+          currentSeat: seat ? seat.seatId : null
+        };
+      })
+    );
+    
+    res.json({ success: true, employees: employeesWithSeats });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+exports.getEmployee = async (req, res) => {
+  try {
+    const employee = await Employee.findById(req.params.id);
+    if (!employee) {
+      return res.status(404).json({ success: false, error: 'Employee not found' });
+    }
+    
+    const seat = await Seat.findOne({ currentOccupant: employee._id });
+    
+    res.json({ 
+      success: true, 
+      employee: {
+        ...employee.toObject(),
+        currentSeat: seat ? seat.seatId : null
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+exports.createEmployee = async (req, res) => {
+  try {
+    const employee = await Employee.create(req.body);
+    res.status(201).json({ success: true, employee });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+};
+
+exports.updateEmployee = async (req, res) => {
+  try {
+    const employee = await Employee.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true, runValidators: true }
+    );
+    
+    if (!employee) {
+      return res.status(404).json({ success: false, error: 'Employee not found' });
+    }
+    
+    res.json({ success: true, employee });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+};
+EOF
+Step 4: Add Excel Import/Export
+First, install additional dependency:
+bashnpm install uuid
+Create src/services/excelService.js:
+javascriptcat > src/services/excelService.js << 'EOF'
+const ExcelJS = require('exceljs');
+const Employee = require('../models/Employee');
+const Seat = require('../models/Seat');
+const ImportSession = require('../models/ImportSession');
+const { v4: uuidv4 } = require('uuid');
+
+class ExcelService {
+  constructor() {
+    this.columnMappings = {
+      // Default mappings - can be overridden
+      'Space Status': 'status',
+      'Emp #': 'employeeNumber',
+      'Employee Number': 'employeeNumber',
+      'First Name': 'firstName',
+      'First': 'firstName',
+      'Last Name': 'lastName',
+      'Last': 'lastName',
+      'Email': 'email',
+      'Business Group': 'businessGroup',
+      'Department': 'department',
+      'Seat': 'seatId',
+      'Seat Number': 'seatId',
+      'Floor': 'floor',
+      'Building': 'building'
+    };
+  }
+
+  async parseExcelFile(filePath) {
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.readFile(filePath);
+    
+    const worksheet = workbook.worksheets[0];
+    const headers = [];
+    const data = [];
+    
+    worksheet.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) {
+        // Extract headers
+        row.eachCell((cell) => {
+          headers.push(cell.value);
+        });
+      } else {
+        // Extract data
+        const rowData = {};
+        row.eachCell((cell, colNumber) => {
+          const header = headers[colNumber - 1];
+          rowData[header] = cell.value;
+        });
+        data.push(rowData);
+      }
+    });
+    
+    return { headers, data };
+  }
+
+  async detectMappings(headers) {
+    const detectedMappings = {};
+    
+    headers.forEach(header => {
+      if (this.columnMappings[header]) {
+        detectedMappings[header] = this.columnMappings[header];
+      } else {
+        // Try to match by partial string
+        const headerLower = header.toLowerCase();
+        Object.entries(this.columnMappings).forEach(([key, value]) => {
+          if (headerLower.includes(value.toLowerCase()) || 
+              key.toLowerCase().includes(headerLower)) {
+            detectedMappings[header] = value;
+          }
+        });
+      }
+    });
+    
+    return detectedMappings;
+  }
+
+  async importData(data, mappings) {
+    const results = {
+      success: [],
+      failed: [],
+      conflicts: []
+    };
+    
+    const sessionId = uuidv4();
+    
+    for (const row of data) {
+      try {
+        const mappedData = {};
+        
+        // Map Excel columns to database fields
+        Object.entries(mappings).forEach(([excelCol, dbField]) => {
+          if (row[excelCol] !== undefined && row[excelCol] !== null && row[excelCol] !== '') {
+            mappedData[dbField] = row[excelCol];
+          }
+        });
+        
+        // Process based on whether it's a seat or employee record
+        if (mappedData.seatId) {
+          await this.processSeatRecord(mappedData, results);
+        }
+        
+      } catch (error) {
+        results.failed.push({
+          row,
+          error: error.message
+        });
+      }
+    }
+    
+    // Save import session
+    await ImportSession.create({
+      sessionId,
+      fileName: 'excel_import',
+      recordsProcessed: data.length,
+      recordsSuccess: results.success.length,
+      recordsFailed: results.failed.length,
+      mappingsUsed: mappings,
+      conflicts: results.conflicts,
+      errors: results.failed
+    });
+    
+    return results;
+  }
+
+  async processSeatRecord(data, results) {
+    // Create or update seat
+    let seat = await Seat.findOne({ seatId: data.seatId });
+    
+    if (!seat) {
+      seat = new Seat({
+        seatId: data.seatId,
+        floor: data.floor,
+        building: data.building,
+        status: 'vacant'
+      });
+    }
+    
+    // Handle employee assignment
+    if (data.status && data.status.toLowerCase() === 'occupied' && data.employeeNumber) {
+      // Find or create employee
+      let employee = await Employee.findOne({ employeeNumber: data.employeeNumber });
+      
+      if (!employee) {
+        employee = await Employee.create({
+          employeeNumber: data.employeeNumber,
+          firstName: data.firstName || 'Unknown',
+          lastName: data.lastName || 'Unknown',
+          email: data.email,
+          businessGroup: data.businessGroup,
+          department: data.department,
+          status: 'active'
+        });
+      }
+      
+      // Check for conflicts
+      const existingSeat = await Seat.findOne({ currentOccupant: employee._id });
+      if (existingSeat && existingSeat.seatId !== data.seatId) {
+        results.conflicts.push({
+          employee: data.employeeNumber,
+          currentSeat: existingSeat.seatId,
+          newSeat: data.seatId
+        });
+        return;
+      }
+      
+      seat.currentOccupant = employee._id;
+      seat.status = 'occupied';
+    } else {
+      seat.status = 'vacant';
+      seat.currentOccupant = null;
+    }
+    
+    await seat.save();
+    results.success.push(data);
+  }
+
+  async exportToExcel() {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Office Space');
+    
+    // Add headers
+    worksheet.columns = [
+      { header: 'Seat Number', key: 'seatId', width: 15 },
+      { header: 'Building', key: 'building', width: 15 },
+      { header: 'Floor', key: 'floor', width: 10 },
+      { header: 'Status', key: 'status', width: 10 },
+      { header: 'Employee Number', key: 'employeeNumber', width: 15 },
+      { header: 'First Name', key: 'firstName', width: 15 },
+      { header: 'Last Name', key: 'lastName', width: 15 },
+      { header: 'Email', key: 'email', width: 25 },
+      { header: 'Business Group', key: 'businessGroup', width: 20 },
+      { header: 'Department', key: 'department', width: 20 }
+    ];
+    
+    // Style headers
+    worksheet.getRow(1).font = { bold: true };
+    
+    // Get all seats with employee data
+    const seats = await Seat.find().populate('currentOccupant').sort('seatId');
+    
+    // Add data
+    seats.forEach(seat => {
+      const row = {
+        seatId: seat.seatId,
+        building: seat.building,
+        floor: seat.floor,
+        status: seat.status
+      };
+      
+      if (seat.currentOccupant) {
+        row.employeeNumber = seat.currentOccupant.employeeNumber;
+        row.firstName = seat.currentOccupant.firstName;
+        row.lastName = seat.currentOccupant.lastName;
+        row.email = seat.currentOccupant.email;
+        row.businessGroup = seat.currentOccupant.businessGroup;
+        row.department = seat.currentOccupant.department;
+      }
+      
+      worksheet.addRow(row);
+    });
+    
+    return workbook;
+  }
+}
+
+module.exports = new ExcelService();
+EOF
+Step 5: Create Import Routes
+Create src/routes/importRoutes.js:
+javascriptcat > src/routes/importRoutes.js << 'EOF'
+const express = require('express');
+const router = express.Router();
+const multer = require('multer');
+const path = require('path');
+const importController = require('../controllers/importController');
+
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'uploads/');
+  },
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + '-' + file.originalname);
+  }
+});
+
+const upload = multer({ 
+  storage,
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    if (ext !== '.xlsx' && ext !== '.xls') {
+      return cb(new Error('Only Excel files are allowed'));
+    }
+    cb(null, true);
+  }
+});
+
+router.post('/analyze', upload.single('file'), importController.analyzeFile);
+router.post('/execute', importController.executeImport);
+router.get('/export', importController.exportData);
+
+module.exports = router;
+EOF
+Create uploads directory:
+bashmkdir uploads
+Create src/controllers/importController.js:
+javascriptcat > src/controllers/importController.js << 'EOF'
+const excelService = require('../services/excelService');
+const fs = require('fs').promises;
+
+exports.analyzeFile = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'No file uploaded' });
+    }
+    
+    const { headers, data } = await excelService.parseExcelFile(req.file.path);
+    const suggestedMappings = await excelService.detectMappings(headers);
+    
+    // Store file info in session for later use
+    const fileInfo = {
+      path: req.file.path,
+      headers,
+      sampleData: data.slice(0, 5),
+      totalRows: data.length
+    };
+    
+    res.json({
+      success: true,
+      headers,
+      sampleData: data.slice(0, 5),
+      totalRows: data.length,
+      suggestedMappings,
+      fileId: req.file.filename
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+exports.executeImport = async (req, res) => {
+  try {
+    const { fileId, mappings } = req.body;
+    const filePath = `uploads/${fileId}`;
+    
+    const { data } = await excelService.parseExcelFile(filePath);
+    const results = await excelService.importData(data, mappings);
+    
+    // Clean up uploaded file
+    await fs.unlink(filePath);
+    
+    res.json({
+      success: true,
+      results: {
+        totalProcessed: data.length,
+        successCount: results.success.length,
+        failedCount: results.failed.length,
+        conflicts: results.conflicts
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+exports.exportData = async (req, res) => {
+  try {
+    const workbook = await excelService.exportToExcel();
+    const fileName = `office_space_export_${new Date().toISOString().split('T')[0]}.xlsx`;
+    
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+EOF
+Step 6: Create Report Routes
+Create src/routes/reportRoutes.js:
+javascriptcat > src/routes/reportRoutes.js << 'EOF'
+const express = require('express');
+const router = express.Router();
+const reportController = require('../controllers/reportController');
+
+router.get('/summary', reportController.getSummaryReport);
+router.get('/business-group', reportController.getBusinessGroupReport);
+router.get('/floor', reportController.getFloorReport);
+
+module.exports = router;
+EOF
+Create src/controllers/reportController.js:
+javascriptcat > src/controllers/reportController.js << 'EOF'
+const Seat = require('../models/Seat');
+const Employee = require('../models/Employee');
+
+exports.getSummaryReport = async (req, res) => {
+  try {
+    const totalSeats = await Seat.countDocuments();
+    const occupiedSeats = await Seat.countDocuments({ status: 'occupied' });
+    const vacantSeats = await Seat.countDocuments({ status: 'vacant' });
+    const totalEmployees = await Employee.countDocuments({ status: 'active' });
+    
+    const occupancyRate = totalSeats > 0 ? (occupiedSeats / totalSeats * 100).toFixed(2) : 0;
+    
+    res.json({
+      success: true,
+      summary: {
+        totalSeats,
+        occupiedSeats,
+        vacantSeats,
+        totalEmployees,
+        occupancyRate: parseFloat(occupancyRate)
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+exports.getBusinessGroupReport = async (req, res) => {
+  try {
+    const report = await Seat.aggregate([
+      {
+        $lookup: {
+          from: 'employees',
+          localField: 'currentOccupant',
+          foreignField: '_id',
+          as: 'employee'
+        }
+      },
+      {
+        $unwind: {
+          path: '$employee',
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      {
+        $group: {
+          _id: '$employee.businessGroup',
+          totalSeats: { $sum: 1 },
+          occupiedSeats: {
+            $sum: { $cond: [{ $eq: ['$status', 'occupied'] }, 1, 0] }
+          }
+        }
+      },
+      {
+        $project: {
+          businessGroup: '$_id',
+          totalSeats: 1,
+          occupiedSeats: 1,
+          occupancyRate: {
+            $round: [
+              { $multiply: [{ $divide: ['$occupiedSeats', '$totalSeats'] }, 100] },
+              2
+            ]
+          }
+        }
+      },
+      {
+        $sort: { businessGroup: 1 }
+      }
+    ]);
+    
+    res.json({
+      success: true,
+      report: report.filter(r => r.businessGroup !== null)
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+exports.getFloorReport = async (req, res) => {
+  try {
+    const report = await Seat.aggregate([
+      {
+        $group: {
+          _id: { building: '$building', floor: '$floor' },
+          totalSeats: { $sum: 1 },
+          occupiedSeats: {
+            $sum: { $cond: [{ $eq: ['$status', 'occupied'] }, 1, 0] }
+          },
+          vacantSeats: {
+            $sum: { $cond: [{ $eq: ['$status', 'vacant'] }, 1, 0] }
+          }
+        }
+      },
+      {
+        $project: {
+          building: '$_id.building',
+          floor: '$_id.floor',
+          totalSeats: 1,
+          occupiedSeats: 1,
+          vacantSeats: 1,
+          occupancyRate: {
+            $round: [
+              { $multiply: [{ $divide: ['$occupiedSeats', '$totalSeats'] }, 100] },
+              2
+            ]
+          }
+        }
+      },
+      {
+        $sort: { building: 1, floor: 1 }
+      }
+    ]);
+    
+    res.json({
+      success: true,
+      report
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+EOF
+Step 7: Update Server.js
+Update backend/server.js:
+javascriptcat > server.js << 'EOF'
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+require('dotenv').config();
+
+const app = express();
+
+// Middleware
+app.use(cors());
+app.use(express.json());
+
+// MongoDB Connection
+mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/office_space_poc')
+  .then(() => console.log('MongoDB connected'))
+  .catch(err => console.error('MongoDB connection error:', err));
+
+// Routes
+app.use('/api/seats', require('./src/routes/seatRoutes'));
+app.use('/api/employees', require('./src/routes/employeeRoutes'));
+app.use('/api/import', require('./src/routes/importRoutes'));
+app.use('/api/reports', require('./src/routes/reportRoutes'));
+
+// Health check
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'OK', message: 'Office Space Management API is running' });
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ success: false, error: err.message });
+});
+
+// Server
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
+EOF
+Step 8: Create Sample Data Script
+Create src/utils/seedData.js:
+javascriptcat > src/utils/seedData.js << 'EOF'
+const mongoose = require('mongoose');
+const Employee = require('../models/Employee');
+const Seat = require('../models/Seat');
+require('dotenv').config();
+
+const seedData = async () => {
+  try {
+    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/office_space_poc');
+    
+    // Clear existing data
+    await Employee.deleteMany({});
+    await Seat.deleteMany({});
+    
+    // Create sample employees
+    const employees = await Employee.create([
+      {
+        employeeNumber: '12345',
+        firstName: 'John',
+        lastName: 'Doe',
+        email: 'john.doe@company.com',
+        businessGroup: 'Engineering',
+        department: 'Software Development',
+        transitNumber: 'T001'
+      },
+      {
+        employeeNumber: '23456',
+        firstName: 'Jane',
+        lastName: 'Smith',
+        email: 'jane.smith@company.com',
+        businessGroup: 'Marketing',
+        department: 'Digital Marketing',
+        transitNumber: 'T002'
+      },
+      {
+        employeeNumber: '34567',
+        firstName: 'Bob',
+        lastName: 'Johnson',
+        email: 'bob.johnson@company.com',
+        businessGroup: 'Finance',
+        department: 'Accounting',
+        transitNumber: 'T003'
+      }
+    ]);
+    
+    // Create sample seats
+    const seats = [];
+    const buildings = ['Building-A', 'Building-B'];
+    
+    for (const building of buildings) {
+      for (let floor = 1; floor <= 3; floor++) {
+        for (let seatNum = 1; seatNum <= 10; seatNum++) {
+          const seatId = `${building.split('-')[1]}-${floor}0${seatNum}`;
+          seats.push({
+            seatId,
+            building,
+            floor,
+            status: 'vacant'
+          });
+        }
+      }
+    }
+    
+    await Seat.create(seats);
+    
+    // Assign some employees to seats
+    await Seat.findOneAndUpdate(
+      { seatId: 'A-101' },
+      { status: 'occupied', currentOccupant: employees[0]._id }
+    );
+    
+    await Seat.findOneAndUpdate(
+      { seatId: 'A-201' },
+      { status: 'occupied', currentOccupant: employees[1]._id }
+    );
+    
+    await Seat.findOneAndUpdate(
+      { seatId: 'B-101' },
+      { status: 'occupied', currentOccupant: employees[2]._id }
+    );
+    
+    console.log('Sample data created successfully!');
+    console.log(`Created ${employees.length} employees and ${seats.length} seats`);
+    process.exit(0);
+  } catch (error) {
+    console.error('Error seeding data:', error);
+    process.exit(1);
+  }
+};
+
+seedData();
+EOF
+Run the seed script:
+bashnode src/utils/seedData.js
+Test the Backend
+Your backend is now ready! Test it:
+bash# Test seats endpoint
+curl http://localhost:3000/api/seats
+
+# Test reports
+curl http://localhost:3000/api/reports/summary
+Frontend Implementation
+Now let's build the React frontend. I'll create the components in the next message due to length limits.
+Would you like me to continue with the frontend implementation?RetryAGYes, continueEditSketched React components for frontend proof of concept.2sThe user wants me to continue with the frontend implementation. I'll create the React components for the POC, including:
+
+Dashboard/Main page
+Seat management components
+Import/Export functionality
+Reports
+Basic navigation
+
+I'll keep it simple and functional for the POC without authentication.Frontend Implementation
+Let's build the React frontend for our POC.
+Step 1: Install Additional Dependencies
+bashcd ~/office-space-management/frontend
+npm install react-toastify
+Step 2: Update App Structure
+Update src/App.js:
+javascriptcat > src/App.js << 'EOF'
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+import './App.css';
+
+// Import pages
+import Dashboard from './pages/Dashboard';
+import SeatManagement from './pages/SeatManagement';
+import ImportExport from './pages/ImportExport';
+import Reports from './pages/Reports';
+
+function App() {
+  return (
+    <Router>
+      <div className="App">
+        <nav className="navbar">
+          <h1>Office Space Management System</h1>
+          <div className="nav-links">
+            <Link to="/">Dashboard</Link>
+            <Link to="/seats">Seat Management</Link>
+            <Link to="/import-export">Import/Export</Link>
+            <Link to="/reports">Reports</Link>
+          </div>
+        </nav>
+        
+        <main className="main-content">
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/seats" element={<SeatManagement />} />
+            <Route path="/import-export" element={<ImportExport />} />
+            <Route path="/reports" element={<Reports />} />
+          </Routes>
+        </main>
+        
+        <ToastContainer position="bottom-right" />
+      </div>
+    </Router>
+  );
+}
+
+export default App;
+EOF
+Step 3: Update CSS
+Update src/App.css:
+csscat > src/App.css << 'EOF'
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #f5f5f5;
+}
+
+.App {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Navigation */
+.navbar {
+  background-color: #2c3e50;
+  color: white;
+  padding: 1rem 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.navbar h1 {
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.nav-links {
+  display: flex;
+  gap: 2rem;
+}
+
+.nav-links a {
+  color: white;
+  text-decoration: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  transition: background-color 0.3s;
+}
+
+.nav-links a:hover {
+  background-color: #34495e;
+}
+
+/* Main Content */
+.main-content {
+  flex: 1;
+  padding: 2rem;
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* Cards */
+.card {
+  background: white;
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  margin-bottom: 1.5rem;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.card h2 {
+  font-size: 1.25rem;
+  color: #2c3e50;
+  margin-bottom: 1rem;
+}
+
+/* Tables */
+.table-container {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th, td {
+  text-align: left;
+  padding: 0.75rem;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+th {
+  background-color: #f8f9fa;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+tr:hover {
+  background-color: #f8f9fa;
+}
+
+/* Buttons */
+.btn {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: all 0.3s;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.btn-primary {
+  background-color: #3498db;
+  color: white;
+}
+
+.btn-primary:hover {
+  background-color: #2980b9;
+}
+
+.btn-success {
+  background-color: #27ae60;
+  color: white;
+}
+
+.btn-success:hover {
+  background-color: #229954;
+}
+
+.btn-danger {
+  background-color: #e74c3c;
+  color: white;
+}
+
+.btn-danger:hover {
+  background-color: #c0392b;
+}
+
+.btn-secondary {
+  background-color: #95a5a6;
+  color: white;
+}
+
+.btn-secondary:hover {
+  background-color: #7f8c8d;
+}
+
+/* Forms */
+.form-group {
+  margin-bottom: 1rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  color: #2c3e50;
+}
+
+.form-control {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 1rem;
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: #3498db;
+}
+
+select.form-control {
+  cursor: pointer;
+}
+
+/* Status badges */
+.badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.badge-success {
+  background-color: #d4edda;
+  color: #155724;
+}
+
+.badge-danger {
+  background-color: #f8d7da;
+  color: #721c24;
+}
+
+.badge-info {
+  background-color: #d1ecf1;
+  color: #0c5460;
+}
+
+/* Stat cards */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.stat-card {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.stat-card h3 {
+  font-size: 0.875rem;
+  color: #7f8c8d;
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+}
+
+.stat-card .value {
+  font-size: 2rem;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.stat-card .subtext {
+  font-size: 0.875rem;
+  color: #95a5a6;
+  margin-top: 0.25rem;
+}
+
+/* Filters */
+.filters {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.filters .form-control {
+  width: auto;
+  min-width: 200px;
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: white;
+  border-radius: 8px;
+  padding: 2rem;
+  max-width: 500px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.modal-header h2 {
+  margin: 0;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: #7f8c8d;
+}
+
+.close-btn:hover {
+  color: #2c3e50;
+}
+
+/* Loading */
+.loading {
+  text-align: center;
+  padding: 2rem;
+  color: #7f8c8d;
+}
+
+/* Empty state */
+.empty-state {
+  text-align: center;
+  padding: 3rem;
+  color: #7f8c8d;
+}
+
+.empty-state h3 {
+  margin-bottom: 0.5rem;
+}
+EOF
+Step 4: Create Dashboard Page
+Create src/pages/Dashboard.js:
+javascriptcat > src/pages/Dashboard.js << 'EOF'
+import React, { useState, useEffect } from 'react';
+import api from '../services/api';
+
+function Dashboard() {
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchStats();
+  }, []);
+
+  const fetchStats = async () => {
+    try {
+      const response = await api.get('/reports/summary');
+      setStats(response.data.summary);
+    } catch (error) {
+      console.error('Error fetching stats:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) return <div className="loading">Loading...</div>;
+
+  return (
+    <div>
+      <h1>Dashboard</h1>
+      
+      <div className="stats-grid">
+        <div className="stat-card">
+          <h3>Total Seats</h3>
+          <div className="value">{stats?.totalSeats || 0}</div>
+        </div>
+        
+        <div className="stat-card">
+          <h3>Occupied Seats</h3>
+          <div className="value">{stats?.occupiedSeats || 0}</div>
+          <div className="subtext">
+            {stats?.occupancyRate || 0}% occupancy
+          </div>
+        </div>
+        
+        <div className="stat-card">
+          <h3>Vacant Seats</h3>
+          <div className="value">{stats?.vacantSeats || 0}</div>
+        </div>
+        
+        <div className="stat-card">
+          <h3>Active Employees</h3>
+          <div className="value">{stats?.totalEmployees || 0}</div>
+        </div>
+      </div>
+
+      <div className="card">
+        <h2>Quick Actions</h2>
+        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+          <a href="/seats" className="btn btn-primary">Manage Seats</a>
+          <a href="/import-export" className="btn btn-success">Import Data</a>
+          <a href="/reports" className="btn btn-info">View Reports</a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default Dashboard;
+EOF
+Step 5: Create Seat Management Page
+Create src/pages/SeatManagement.js:
+javascriptcat > src/pages/SeatManagement.js << 'EOF'
+import React, { useState, useEffect } from 'react';
+import { toast } from 'react-toastify';
+import api from '../services/api';
+import SeatList from '../components/SeatList';
+import AssignSeatModal from '../components/AssignSeatModal';
+
+function SeatManagement() {
+  const [seats, setSeats] = useState([]);
+  const [employees, setEmployees] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filters, setFilters] = useState({
+    floor: '',
+    status: '',
+    building: ''
+  });
+  const [selectedSeat, setSelectedSeat] = useState(null);
+  const [showAssignModal, setShowAssignModal] = useState(false);
+
+  useEffect(() => {
+    fetchSeats();
+    fetchEmployees();
+  }, [filters]);
+
+  const fetchSeats = async () => {
+    try {
+      const params = new URLSearchParams();
+      if (filters.floor) params.append('floor', filters.floor);
+      if (filters.status) params.append('status', filters.status);
+      if (filters.building) params.append('building', filters.building);
+      
+      const response = await api.get(`/seats?${params}`);
+      setSeats(response.data.seats);
+    } catch (error) {
+      toast.error('Error fetching seats');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchEmployees = async () => {
+    try {
+      const response = await api.get('/employees');
+      setEmployees(response.data.employees);
+    } catch (error) {
+      console.error('Error fetching employees:', error);
+    }
+  };
+
+  const handleAssignSeat = (seat) => {
+    setSelectedSeat(seat);
+    setShowAssignModal(true);
+  };
+
+  const handleVacateSeat = async (seatId) => {
+    if (window.confirm('Are you sure you want to vacate this seat?')) {
+      try {
+        await api.put(`/seats/${seatId}/vacate`);
+        toast.success('Seat vacated successfully');
+        fetchSeats();
+      } catch (error) {
+        toast.error('Error vacating seat');
+      }
+    }
+  };
+
+  const handleFilterChange = (e) => {
+    setFilters({
+      ...filters,
+      [e.target.name]: e.target.value
+    });
+  };
+
+  const handleAssignmentComplete = () => {
+    setShowAssignModal(false);
+    fetchSeats();
+    toast.success('Seat assigned successfully');
+  };
+
+  if (loading) return <div className="loading">Loading...</div>;
+
+  return (
+    <div>
+      <h1>Seat Management</h1>
+      
+      <div className="card">
+        <h2>Filters</h2>
+        <div className="filters">
+          <select 
+            name="building" 
+            className="form-control"
+            value={filters.building}
+            onChange={handleFilterChange}
+          >
+            <option value="">All Buildings</option>
+            <option value="Building-A">Building A</option>
+            <option value="Building-B">Building B</option>
+          </select>
+          
+          <select 
+            name="floor" 
+            className="form-control"
+            value={filters.floor}
+            onChange={handleFilterChange}
+          >
+            <option value="">All Floors</option>
+            <option value="1">Floor 1</option>
+            <option value="2">Floor 2</option>
+            <option value="3">Floor 3</option>
+          </select>
+          
+          <select 
+            name="status" 
+            className="form-control"
+            value={filters.status}
+            onChange={handleFilterChange}
+          >
+            <option value="">All Status</option>
+            <option value="vacant">Vacant</option>
+            <option value="occupied">Occupied</option>
+          </select>
+        </div>
+      </div>
+
+      <SeatList 
+        seats={seats}
+        onAssign={handleAssignSeat}
+        onVacate={handleVacateSeat}
+      />
+
+      {showAssignModal && (
+        <AssignSeatModal
+          seat={selectedSeat}
+          employees={employees}
+          onClose={() => setShowAssignModal(false)}
+          onAssign={handleAssignmentComplete}
+        />
+      )}
+    </div>
+  );
+}
+
+export default SeatManagement;
+EOF
+Step 6: Create Components
+Create src/components/SeatList.js:
+javascriptcat > src/components/SeatList.js << 'EOF'
+import React from 'react';
+
+function SeatList({ seats, onAssign, onVacate }) {
+  if (seats.length === 0) {
+    return (
+      <div className="card">
+        <div className="empty-state">
+          <h3>No seats found</h3>
+          <p>Try adjusting your filters</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card">
+      <h2>Seats ({seats.length})</h2>
+      <div className="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Seat ID</th>
+              <th>Building</th>
+              <th>Floor</th>
+              <th>Status</th>
+              <th>Occupant</th>
+              <th>Department</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {seats.map(seat => (
+              <tr key={seat._id}>
+                <td>{seat.seatId}</td>
+                <td>{seat.building}</td>
+                <td>{seat.floor}</td>
+                <td>
+                  <span className={`badge ${seat.status === 'vacant' ? 'badge-success' : 'badge-danger'}`}>
+                    {seat.status}
+                  </span>
+                </td>
+                <td>
+                  {seat.currentOccupant ? 
+                    `${seat.currentOccupant.firstName} ${seat.currentOccupant.lastName}` : 
+                    '-'
+                  }
+                </td>
+                <td>{seat.currentOccupant?.department || '-'}</td>
+                <td>
+                  {seat.status === 'vacant' ? (
+                    <button 
+                      className="btn btn-primary btn-sm"
+                      onClick={() => onAssign(seat)}
+                    >
+                      Assign
+                    </button>
+                  ) : (
+                    <button 
+                      className="btn btn-danger btn-sm"
+                      onClick={() => onVacate(seat.seatId)}
+                    >
+                      Vacate
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+export default SeatList;
+EOF
+Create src/components/AssignSeatModal.js:
+javascriptcat > src/components/AssignSeatModal.js << 'EOF'
+import React, { useState } from 'react';
+import { toast } from 'react-toastify';
+import api from '../services/api';
+
+function AssignSeatModal({ seat, employees, onClose, onAssign }) {
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  // Filter out employees who already have seats
+  const availableEmployees = employees.filter(emp => !emp.currentSeat);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!selectedEmployeeId) {
+      toast.error('Please select an employee');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await api.put(`/seats/${seat.seatId}/assign`, {
+        employeeId: selectedEmployeeId
+      });
+      onAssign();
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Error assigning seat');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>Assign Seat {seat.seatId}</h2>
+          <button className="close-btn" onClick={onClose}>&times;</button>
+        </div>
+        
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label>Select Employee</label>
+            <select 
+              className="form-control"
+              value={selectedEmployeeId}
+              onChange={(e) => setSelectedEmployeeId(e.target.value)}
+              required
+            >
+              <option value="">-- Select Employee --</option>
+              {availableEmployees.map(emp => (
+                <option key={emp._id} value={emp._id}>
+                  {emp.employeeNumber} - {emp.firstName} {emp.lastName} ({emp.department})
+                </option>
+              ))}
+            </select>
+          </div>
+          
+          {availableEmployees.length === 0 && (
+            <p style={{ color: '#e74c3c', marginBottom: '1rem' }}>
+              No available employees without seats
+            </p>
+          )}
+          
+          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+            <button 
+              type="button" 
+              className="btn btn-secondary"
+              onClick={onClose}
+              disabled={loading}
+            >
+              Cancel
+            </button>
+            <button 
+              type="submit" 
+              className="btn btn-primary"
+              disabled={loading || availableEmployees.length === 0}
+            >
+              {loading ? 'Assigning...' : 'Assign'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+export default AssignSeatModal;
+EOF
+Step 7: Create Import/Export Page
+Create src/pages/ImportExport.js:
+javascriptcat > src/pages/ImportExport.js << 'EOF'
+import React, { useState } from 'react';
+import { toast } from 'react-toastify';
+import api from '../services/api';
+
+function ImportExport() {
+  const [file, setFile] = useState(null);
+  const [fileInfo, setFileInfo] = useState(null);
+  const [mappings, setMappings] = useState({});
+  const [importing, setImporting] = useState(false);
+
+  const handleFileChange = (e) => {
+    const selectedFile = e.target.files[0];
+    if (selectedFile) {
+      setFile(selectedFile);
+      analyzeFile(selectedFile);
+    }
+  };
+
+  const analyzeFile = async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const response = await api.post('/import/analyze', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      
+      setFileInfo(response.data);
+      setMappings(response.data.suggestedMappings);
+      toast.success('File analyzed successfully');
+    } catch (error) {
+      toast.error('Error analyzing file');
+      setFile(null);
+    }
+  };
+
+  const handleMappingChange = (excelColumn, dbField) => {
+    setMappings({
+      ...mappings,
+      [excelColumn]: dbField
+    });
+  };
+
+  const handleImport = async () => {
+    if (!fileInfo) return;
+
+    setImporting(true);
+    try {
+      const response = await api.post('/import/execute', {
+        fileId: fileInfo.fileId,
+        mappings
+      });
+      
+      const { results } = response.data;
+      toast.success(
+        `Import completed! Success: ${results.successCount}, Failed: ${results.failedCount}`
+      );
+      
+      // Reset form
+      setFile(null);
+      setFileInfo(null);
+      setMappings({});
+    } catch (error) {
+      toast.error('Error importing data');
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const handleExport = async () => {
+    try {
+      const response = await api.get('/import/export', {
+        responseType: 'blob'
+      });
+      
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `office_space_export_${new Date().toISOString().split('T')[0]}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      
+      toast.success('Export completed');
+    } catch (error) {
+      toast.error('Error exporting data');
+    }
+  };
+
+  const dbFields = [
+    { value: 'seatId', label: 'Seat ID' },
+    { value: 'building', label: 'Building' },
+    { value: 'floor', label: 'Floor' },
+    { value: 'status', label: 'Status' },
+    { value: 'employeeNumber', label: 'Employee Number' },
+    { value: 'firstName', label: 'First Name' },
+    { value: 'lastName', label: 'Last Name' },
+    { value: 'email', label: 'Email' },
+    { value: 'businessGroup', label: 'Business Group' },
+    { value: 'department', label: 'Department' }
+  ];
+
+  return (
+    <div>
+      <h1>Import/Export Data</h1>
+      
+      <div className="card">
+        <h2>Export Data</h2>
+        <p>Download current office space data as Excel file</p>
+        <button className="btn btn-success" onClick={handleExport}>
+          Export to Excel
+        </button>
+      </div>
+
+      <div className="card">
+        <h2>Import Data</h2>
+        
+        <div className="form-group">
+          <label>Select Excel File</label>
+          <input 
+            type="file" 
+            accept=".xlsx,.xls"
+            onChange={handleFileChange}
+            className="form-control"
+          />
+        </div>
+
+        {fileInfo && (
+          <>
+            <div style={{ marginBottom: '1.5rem' }}>
+              <p><strong>File:</strong> {file.name}</p>
+              <p><strong>Total Rows:</strong> {fileInfo.totalRows}</p>
+              <p><strong>Columns Found:</strong> {fileInfo.headers.join(', ')}</p>
+            </div>
+
+            <h3>Column Mappings</h3>
+            <p style={{ marginBottom: '1rem', color: '#7f8c8d' }}>
+              Map Excel columns to database fields
+            </p>
+            
+            <div style={{ marginBottom: '1.5rem' }}>
+              {fileInfo.headers.map(header => (
+                <div key={header} className="form-group">
+                  <label>{header}</label>
+                  <select 
+                    className="form-control"
+                    value={mappings[header] || ''}
+                    onChange={(e) => handleMappingChange(header, e.target.value)}
+                  >
+                    <option value="">-- Skip this column --</option>
+                    {dbFields.map(field => (
+                      <option key={field.value} value={field.value}>
+                        {field.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+            </div>
+
+            <button 
+              className="btn btn-primary"
+              onClick={handleImport}
+              disabled={importing || Object.keys(mappings).length === 0}
+            >
+              {importing ? 'Importing...' : 'Import Data'}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default ImportExport;
+EOF
+Step 8: Create Reports Page
+Create src/pages/Reports.js:
+javascriptcat > src/pages/Reports.js << 'EOF'
+import React, { useState, useEffect } from 'react';
+import api from '../services/api';
+
+function Reports() {
+  const [businessGroupReport, setBusinessGroupReport] = useState([]);
+  const [floorReport, setFloorReport] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchReports();
+  }, []);
+
+  const fetchReports = async () => {
+    try {
+      const [bgResponse, floorResponse] = await Promise.all([
+        api.get('/reports/business-group'),
+        api.get('/reports/floor')
+      ]);
+      
+      setBusinessGroupReport(bgResponse.data.report);
+      setFloorReport(floorResponse.data.report);
+    } catch (error) {
+      console.error('Error fetching reports:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) return <div className="loading">Loading...</div>;
+
+  return (
+    <div>
+      <h1>Reports</h1>
+      
+      <div className="card">
+        <h2>Business Group Occupancy</h2>
+        <div className="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Business Group</th>
+                <th>Total Seats</th>
+                <th>Occupied</th>
+                <th>Occupancy Rate</th>
+              </tr>
+            </thead>
+            <tbody>
+              {businessGroupReport.map((group, index) => (
+                <tr key={index}>
+                  <td>{group.businessGroup || 'Unassigned'}</td>
+                  <td>{group.totalSeats}</td>
+                  <td>{group.occupiedSeats}</td>
+                  <td>
+                    <span className={`badge ${group.occupancyRate > 80 ? 'badge-danger' : 'badge-success'}`}>
+                      {group.occupancyRate}%
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="card">
+        <h2>Floor Occupancy</h2>
+        <div className="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Building</th>
+                <th>Floor</th>
+                <th>Total Seats</th>
+                <th>Occupied</th>
+                <th>Vacant</th>
+                <th>Occupancy Rate</th>
+              </tr>
+            </thead>
+            <tbody>
+              {floorReport.map((floor, index) => (
+                <tr key={index}>
+                  <td>{floor.building}</td>
+                  <td>{floor.floor}</td>
+                  <td>{floor.totalSeats}</td>
+                  <td>{floor.occupiedSeats}</td>
+                  <td>{floor.vacantSeats}</td>
+                  <td>
+                    <span className={`badge ${floor.occupancyRate > 80 ? 'badge-danger' : 'badge-success'}`}>
+                      {floor.occupancyRate}%
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default Reports;
+EOF
+Step 9: Create Missing Directories
+bashmkdir -p src/pages
+mkdir -p src/components
+Step 10: Create a Sample Excel File
+Create backend/sample-data.xlsx with this script:
+Create backend/src/utils/createSampleExcel.js:
+javascriptcat > src/utils/createSampleExcel.js << 'EOF'
+const ExcelJS = require('exceljs');
+
+async function createSampleExcel() {
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet('Office Space Data');
+
+  // Add headers
+  worksheet.columns = [
+    { header: 'Seat Number', key: 'seat' },
+    { header: 'Building', key: 'building' },
+    { header: 'Floor', key: 'floor' },
+    { header: 'Space Status', key: 'status' },
+    { header: 'Emp #', key: 'empNum' },
+    { header: 'First Name', key: 'firstName' },
+    { header: 'Last Name', key: 'lastName' },
+    { header: 'Email', key: 'email' },
+    { header: 'Business Group', key: 'businessGroup' },
+    { header: 'Department', key: 'department' }
+  ];
+
+  // Add sample data
+  const sampleData = [
+    {
+      seat: 'A-101', building: 'Building-A', floor: 1, status: 'Occupied',
+      empNum: '12345', firstName: 'John', lastName: 'Doe',
+      email: 'john.doe@company.com', businessGroup: 'Engineering', department: 'Software'
+    },
+    {
+      seat: 'A-102', building: 'Building-A', floor: 1, status: 'Vacant'
+    },
+    {
+      seat: 'A-103', building: 'Building-A', floor: 1, status: 'Occupied',
+      empNum: '23456', firstName: 'Jane', lastName: 'Smith',
+      email: 'jane.smith@company.com', businessGroup: 'Marketing', department: 'Digital'
+    },
+    {
+      seat: 'A-201', building: 'Building-A', floor: 2, status: 'Vacant'
+    },
+    {
+      seat: 'B-101', building: 'Building-B', floor: 1, status: 'Occupied',
+      empNum: '34567', firstName: 'Bob', lastName: 'Johnson',
+      email: 'bob.johnson@company.com', businessGroup: 'Finance', department: 'Accounting'
+    }
+  ];
+
+  sampleData.forEach(data => {
+    worksheet.addRow(data);
+  });
+
+  // Style the header row
+  worksheet.getRow(1).font = { bold: true };
+
+  // Save the file
+  await workbook.xlsx.writeFile('sample-office-data.xlsx');
+  console.log('Sample Excel file created: sample-office-data.xlsx');
+}
+
+createSampleExcel();
+EOF
+Run it to create sample file:
+bashcd backend
+node src/utils/createSampleExcel.js
+Testing Your POC
+
+Make sure both servers are running:
+
+Backend: http://localhost:3000
+Frontend: http://localhost:3001
+
+
+Test the features:
+
+Dashboard shows statistics
+Seat Management allows viewing, assigning, and vacating seats
+Import/Export allows uploading the sample Excel file
+Reports show occupancy by business group and floor
+
+
+Test the workflow:
+
+Upload sample-office-data.xlsx in Import/Export
+Map the columns (should auto-detect most)
+Import the data
+Check Seat Management to see imported seats
+Try assigning/vacating seats
+Export the data to verify changes
+
+
+
+Your POC is now complete! You have:
+
+✅ Seat management (assign, move, vacate)
+✅ Excel import with column mapping
+✅ Excel export
+✅ Basic reporting
+✅ No authentication (as requested for POC)
+✅ Clean, functional UI
+
+The system is ready for demonstration and feedback collection!RetryAGHow to ensure my front end, back end and data base are running and activeEditStrategized comprehensive system verification steps for application components.1sThe user wants to know how to verify that all parts of their application (frontend, backend, and MongoDB) are running properly. I should provide clear commands and checks for each component on macOS.Here's how to ensure all parts of your application are running properly on your MacBook:
+1. Check MongoDB Status
+Check if MongoDB is running:
+bash# Check MongoDB service status
+brew services list | grep mongodb
+
+# Should show something like:
+# mongodb-community started yourusername ~/Library/LaunchAgents/homebrew.mxcl.mongodb-community.plist
+If MongoDB is NOT running:
+bash# Start MongoDB
+brew services start mongodb-community
+
+# Verify it's running
+brew services list | grep mongodb
+Test MongoDB connection:
+bash# Connect to MongoDB shell
+mongosh
+
+# Once connected, you'll see:
+# Current Mongosh Log ID: ...
+# Connecting to: mongodb://127.0.0.1:27017/...
+
+# Check your database
+use office_space_poc
+show collections
+
+# Exit with:
+exit
+2. Check Backend Status
+Navigate to backend directory:
+bashcd ~/office-space-management/backend
+Check if backend is running:
+bash# Check if Node.js is running on port 3000
+lsof -i :3000
+
+# Should show something like:
+# COMMAND   PID         USER   FD   TYPE
+# node    12345   yourusername   23u  IPv6
+If backend is NOT running:
+bash# Make sure you're in backend directory
+cd ~/office-space-management/backend
+
+# Start the backend
+npm run dev
+
+# You should see:
+# Server running on port 3000
+# MongoDB connected
+Test backend API:
+bash# In a new terminal, test the health endpoint
+curl http://localhost:3000/api/health
+
+# Should return:
+# {"status":"OK","message":"Office Space Management API is running"}
+
+# Test seats endpoint
+curl http://localhost:3000/api/seats
+
+# Should return seats data
+3. Check Frontend Status
+Check if frontend is running:
+bash# Check if React is running on port 3001
+lsof -i :3001
+
+# Should show something like:
+# COMMAND   PID         USER   FD   TYPE
+# node    54321   yourusername   23u  IPv6
+If frontend is NOT running:
+bash# Open a new terminal
+cd ~/office-space-management/frontend
+
+# Start the frontend
+npm start
+
+# Should automatically open browser at http://localhost:3001
+# You'll see in terminal:
+# Compiled successfully!
+# The app is running at:
+# http://localhost:3001/
+4. Complete System Check Script
+Create a helpful script to check everything at once:
+bashcat > ~/office-space-management/check-system.sh << 'EOF'
+#!/bin/bash
+
+echo "🔍 Checking Office Space Management System Status..."
+echo "================================================"
+
+# Check MongoDB
+echo -n "MongoDB Status: "
+if brew services list | grep -q "mongodb-community.*started"; then
+    echo "✅ Running"
+else
+    echo "❌ Not running"
+    echo "   Run: brew services start mongodb-community"
+fi
+
+# Check Backend
+echo -n "Backend API Status: "
+if lsof -i :3000 > /dev/null 2>&1; then
+    echo "✅ Running on port 3000"
+    # Test API
+    if curl -s http://localhost:3000/api/health | grep -q "OK"; then
+        echo "   API Health: ✅ Healthy"
+    else
+        echo "   API Health: ❌ Not responding"
+    fi
+else
+    echo "❌ Not running"
+    echo "   Run: cd backend && npm run dev"
+fi
+
+# Check Frontend
+echo -n "Frontend Status: "
+if lsof -i :3001 > /dev/null 2>&1; then
+    echo "✅ Running on port 3001"
+else
+    echo "❌ Not running"
+    echo "   Run: cd frontend && npm start"
+fi
+
+echo "================================================"
+
+# Quick links
+if lsof -i :3001 > /dev/null 2>&1; then
+    echo "📱 Frontend URL: http://localhost:3001"
+fi
+if lsof -i :3000 > /dev/null 2>&1; then
+    echo "🔧 Backend API: http://localhost:3000/api/health"
+fi
+EOF
+
+# Make it executable
+chmod +x ~/office-space-management/check-system.sh
+Run the check script:
+bash~/office-space-management/check-system.sh
+5. Start Everything in Order
+If nothing is running, here's the correct startup sequence:
+Terminal 1 - MongoDB:
+bash# Start MongoDB (if not already running)
+brew services start mongodb-community
+
+# Verify
+mongosh --eval "db.adminCommand('ping')"
+Terminal 2 - Backend:
+bashcd ~/office-space-management/backend
+npm run dev
+
+# Wait for "MongoDB connected" message
+Terminal 3 - Frontend:
+bashcd ~/office-space-management/frontend
+npm start
+
+# Browser should open automatically
+6. Common Issues and Solutions
+Port Already in Use:
+bash# Find what's using port 3000
+lsof -i :3000
+
+# Kill the process
+kill -9 <PID>
+
+# Or kill all node processes
+killall node
+MongoDB Won't Start:
+bash# Check MongoDB logs
+brew services log mongodb-community
+
+# Restart MongoDB
+brew services restart mongodb-community
+
+# Check if data directory exists
+ls -la /usr/local/var/mongodb
+Backend Can't Connect to MongoDB:
+bash# Check MongoDB is accepting connections
+mongosh --eval "db.adminCommand('ping')"
+
+# Check your .env file
+cat backend/.env
+# Should have: MONGODB_URI=mongodb://localhost:27017/office_space_poc
+Frontend Can't Connect to Backend:
+bash# Check frontend .env
+cat frontend/.env
+# Should have: REACT_APP_API_URL=http://localhost:3000/api
+
+# Check CORS in backend
+# Make sure backend server.js has: app.use(cors());
+7. Quick Status Dashboard
+Open three terminal tabs and run:
+Tab 1 - System Check:
+bashwatch -n 5 ~/office-space-management/check-system.sh
+Tab 2 - Backend Logs:
+bashcd ~/office-space-management/backend
+npm run dev
+Tab 3 - Frontend Logs:
+bashcd ~/office-space-management/frontend
+npm start
+Now you can monitor all three components in real-time!
+8. Verify Everything Works
+Once all services are running:
+
+Open browser to http://localhost:3001
+You should see the Office Space Management System
+Click on different menu items (Dashboard, Seat Management, etc.)
+If you see data, everything is working! 🎉
+
+If you see any errors, check the respective terminal for error messages.RetryAGThis project is for RBC, so can we make GUI and overall design align with RBC web page https://www.rbcroyalbank.com/personal.html
+You can add images and other details, just let me know what I need to do on my end to have it workingEditStrategized RBC-inspired design transformation with branding elements.5sThe user wants to align the design with RBC (Royal Bank of Canada) branding. Looking at the RBC website, I can see their design system uses:
+
+Primary colors: RBC Blue (#005DAA), Yellow (#FFD200), White
+Clean, professional design
+Sans-serif fonts (they use their own RBC font, but we can use similar)
+Lots of white space
+Blue headers with white text
+Yellow accents for CTAs
+Card-based layouts
+
+I'll need to:
+
+Update the CSS with RBC colors and styling
+Add RBC logo (user will need to download it)
+Update the navigation to match RBC style
+Make the overall design more professional and bank-like
+Add some placeholder images that the user can replace
+Great idea! Let's redesign the UI to match RBC's branding and professional look. I'll update the styling to align with RBC's design system.
+RBC Design System Colors & Styling
+First, let's update the CSS with RBC's brand colors and design patterns:
+Step 1: Update App.css with RBC Styling
+csscat > src/App.css << 'EOF'
+/* RBC Brand Colors */
+:root {
+  --rbc-blue: #005DAA;
+  --rbc-blue-dark: #003F7F;
+  --rbc-yellow: #FFD200;
+  --rbc-light-blue: #0076C0;
+  --rbc-gray: #6B7785;
+  --rbc-light-gray: #F4F4F6;
+  --rbc-white: #FFFFFF;
+  --rbc-black: #1F1F1F;
+  --rbc-success: #008A00;
+  --rbc-danger: #C4262E;
+}
+
+/* Reset and Base Styles */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--rbc-light-gray);
+  color: var(--rbc-black);
+  line-height: 1.5;
+}
+
+.App {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* RBC Navigation */
+.navbar {
+  background-color: var(--rbc-blue);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.navbar-content {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 80px;
+}
+
+.navbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.navbar-logo {
+  height: 50px;
+  width: auto;
+}
+
+.navbar h1 {
+  color: var(--rbc-white);
+  font-size: 1.5rem;
+  font-weight: 300;
+  letter-spacing: -0.02em;
+}
+
+.nav-links {
+  display: flex;
+  gap: 0;
+  align-items: center;
+  height: 100%;
+}
+
+.nav-links a {
+  color: var(--rbc-white);
+  text-decoration: none;
+  padding: 0 1.5rem;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  transition: background-color 0.3s;
+  font-weight: 400;
+  position: relative;
+}
+
+.nav-links a:hover {
+  background-color: var(--rbc-blue-dark);
+}
+
+.nav-links a.active {
+  background-color: var(--rbc-blue-dark);
+}
+
+.nav-links a.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background-color: var(--rbc-yellow);
+}
+
+/* Main Content */
+.main-content {
+  flex: 1;
+  padding: 2rem;
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* Page Headers */
+h1 {
+  color: var(--rbc-blue);
+  font-size: 2.5rem;
+  font-weight: 300;
+  margin-bottom: 2rem;
+  letter-spacing: -0.02em;
+}
+
+h2 {
+  color: var(--rbc-blue);
+  font-size: 1.75rem;
+  font-weight: 400;
+  margin-bottom: 1rem;
+}
+
+h3 {
+  color: var(--rbc-blue-dark);
+  font-size: 1.25rem;
+  font-weight: 500;
+  margin-bottom: 0.75rem;
+}
+
+/* RBC Cards */
+.card {
+  background: var(--rbc-white);
+  border-radius: 8px;
+  padding: 2rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  margin-bottom: 1.5rem;
+  border: 1px solid rgba(0,0,0,0.05);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--rbc-light-gray);
+}
+
+/* RBC Buttons */
+.btn {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 500;
+  transition: all 0.3s;
+  text-decoration: none;
+  display: inline-block;
+  text-align: center;
+  line-height: 1.5;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background-color: var(--rbc-blue);
+  color: var(--rbc-white);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background-color: var(--rbc-blue-dark);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.btn-secondary {
+  background-color: var(--rbc-white);
+  color: var(--rbc-blue);
+  border: 2px solid var(--rbc-blue);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background-color: var(--rbc-blue);
+  color: var(--rbc-white);
+}
+
+.btn-accent {
+  background-color: var(--rbc-yellow);
+  color: var(--rbc-black);
+  font-weight: 600;
+}
+
+.btn-accent:hover:not(:disabled) {
+  background-color: #E6C200;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.btn-success {
+  background-color: var(--rbc-success);
+  color: var(--rbc-white);
+}
+
+.btn-success:hover:not(:disabled) {
+  background-color: #006F00;
+}
+
+.btn-danger {
+  background-color: var(--rbc-danger);
+  color: var(--rbc-white);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background-color: #A3161C;
+}
+
+.btn-sm {
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+}
+
+/* Forms - RBC Style */
+.form-group {
+  margin-bottom: 1.5rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  color: var(--rbc-blue-dark);
+  font-size: 0.875rem;
+}
+
+.form-control {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1px solid #C4C7CC;
+  border-radius: 4px;
+  font-size: 1rem;
+  transition: border-color 0.3s;
+  background-color: var(--rbc-white);
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: var(--rbc-blue);
+  box-shadow: 0 0 0 3px rgba(0, 93, 170, 0.1);
+}
+
+/* Tables - RBC Style */
+.table-container {
+  overflow-x: auto;
+  border: 1px solid #E1E3E6;
+  border-radius: 8px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background-color: var(--rbc-white);
+}
+
+th {
+  background-color: var(--rbc-blue);
+  color: var(--rbc-white);
+  font-weight: 500;
+  text-align: left;
+  padding: 1rem;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+td {
+  padding: 1rem;
+  border-bottom: 1px solid #E1E3E6;
+  color: var(--rbc-black);
+}
+
+tr:hover {
+  background-color: #F8F9FA;
+}
+
+tr:last-child td {
+  border-bottom: none;
+}
+
+/* Status Badges - RBC Style */
+.badge {
+  padding: 0.375rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: inline-block;
+}
+
+.badge-success {
+  background-color: #E6F5E6;
+  color: var(--rbc-success);
+}
+
+.badge-danger {
+  background-color: #FDEAEA;
+  color: var(--rbc-danger);
+}
+
+.badge-info {
+  background-color: #E6F2FA;
+  color: var(--rbc-light-blue);
+}
+
+.badge-warning {
+  background-color: #FFF7E6;
+  color: #B87500;
+}
+
+/* Stat Cards - RBC Style */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.stat-card {
+  background: var(--rbc-white);
+  padding: 1.5rem;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  border: 1px solid rgba(0,0,0,0.05);
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background-color: var(--rbc-yellow);
+}
+
+.stat-card h3 {
+  font-size: 0.875rem;
+  color: var(--rbc-gray);
+  margin-bottom: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 500;
+}
+
+.stat-card .value {
+  font-size: 2.5rem;
+  font-weight: 300;
+  color: var(--rbc-blue);
+  line-height: 1.2;
+}
+
+.stat-card .subtext {
+  font-size: 0.875rem;
+  color: var(--rbc-gray);
+  margin-top: 0.5rem;
+}
+
+/* Filters - RBC Style */
+.filters {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  padding: 1.5rem;
+  background-color: #F8F9FA;
+  border-radius: 8px;
+  border: 1px solid #E1E3E6;
+}
+
+.filters .form-control {
+  width: auto;
+  min-width: 200px;
+}
+
+/* Modal - RBC Style */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(31, 31, 31, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 2rem;
+}
+
+.modal {
+  background: var(--rbc-white);
+  border-radius: 8px;
+  max-width: 600px;
+  width: 100%;
+  max-height: 90vh;
+  overflow: hidden;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem 2rem;
+  border-bottom: 1px solid #E1E3E6;
+  background-color: #F8F9FA;
+}
+
+.modal-header h2 {
+  margin: 0;
+  color: var(--rbc-blue);
+  font-size: 1.5rem;
+  font-weight: 400;
+}
+
+.modal-body {
+  padding: 2rem;
+  overflow-y: auto;
+  max-height: calc(90vh - 140px);
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: var(--rbc-gray);
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.3s;
+}
+
+.close-btn:hover {
+  background-color: #E1E3E6;
+  color: var(--rbc-blue);
+}
+
+/* Loading State */
+.loading {
+  text-align: center;
+  padding: 4rem;
+  color: var(--rbc-gray);
+}
+
+.loading::after {
+  content: '';
+  display: inline-block;
+  width: 32px;
+  height: 32px;
+  margin-left: 1rem;
+  border: 3px solid var(--rbc-light-gray);
+  border-top-color: var(--rbc-blue);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Empty State */
+.empty-state {
+  text-align: center;
+  padding: 4rem 2rem;
+  color: var(--rbc-gray);
+}
+
+.empty-state-icon {
+  font-size: 4rem;
+  color: #E1E3E6;
+  margin-bottom: 1rem;
+}
+
+.empty-state h3 {
+  color: var(--rbc-blue-dark);
+  margin-bottom: 0.5rem;
+}
+
+/* Quick Actions */
+.quick-actions {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.action-card {
+  flex: 1;
+  min-width: 250px;
+  padding: 1.5rem;
+  background: var(--rbc-white);
+  border: 1px solid #E1E3E6;
+  border-radius: 8px;
+  text-align: center;
+  transition: all 0.3s;
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+}
+
+.action-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  border-color: var(--rbc-blue);
+}
+
+.action-icon {
+  font-size: 3rem;
+  color: var(--rbc-yellow);
+  margin-bottom: 1rem;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .navbar-content {
+    flex-direction: column;
+    height: auto;
+    padding: 1rem;
+  }
+  
+  .nav-links {
+    width: 100%;
+    flex-direction: column;
+    gap: 0;
+  }
+  
+  .nav-links a {
+    width: 100%;
+    justify-content: center;
+    padding: 0.75rem;
+  }
+  
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .main-content {
+    padding: 1rem;
+  }
+}
+EOF
+Step 2: Update App.js to Include RBC Branding
+javascriptcat > src/App.js << 'EOF'
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, NavLink } from 'react-router-dom';
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+import './App.css';
+
+// Import pages
+import Dashboard from './pages/Dashboard';
+import SeatManagement from './pages/SeatManagement';
+import ImportExport from './pages/ImportExport';
+import Reports from './pages/Reports';
+
+function App() {
+  return (
+    <Router>
+      <div className="App">
+        <nav className="navbar">
+          <div className="navbar-content">
+            <div className="navbar-brand">
+              <img 
+                src="/rbc-logo.png" 
+                alt="RBC Logo" 
+                className="navbar-logo"
+              />
+              <h1>Office Space Management</h1>
+            </div>
+            <div className="nav-links">
+              <NavLink to="/" className={({ isActive }) => isActive ? 'active' : ''}>
+                Dashboard
+              </NavLink>
+              <NavLink to="/seats" className={({ isActive }) => isActive ? 'active' : ''}>
+                Seat Management
+              </NavLink>
+              <NavLink to="/import-export" className={({ isActive }) => isActive ? 'active' : ''}>
+                Import/Export
+              </NavLink>
+              <NavLink to="/reports" className={({ isActive }) => isActive ? 'active' : ''}>
+                Reports
+              </NavLink>
+            </div>
+          </div>
+        </nav>
+        
+        <main className="main-content">
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/seats" element={<SeatManagement />} />
+            <Route path="/import-export" element={<ImportExport />} />
+            <Route path="/reports" element={<Reports />} />
+          </Routes>
+        </main>
+        
+        <ToastContainer 
+          position="bottom-right"
+          theme="light"
+          toastStyle={{
+            backgroundColor: '#FFFFFF',
+            color: '#1F1F1F',
+            borderLeft: '4px solid #005DAA'
+          }}
+        />
+      </div>
+    </Router>
+  );
+}
+
+export default App;
+EOF
+Step 3: Update Dashboard with RBC Styling
+javascriptcat > src/pages/Dashboard.js << 'EOF'
+import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import api from '../services/api';
+
+function Dashboard() {
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchStats();
+  }, []);
+
+  const fetchStats = async () => {
+    try {
+      const response = await api.get('/reports/summary');
+      setStats(response.data.summary);
+    } catch (error) {
+      console.error('Error fetching stats:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) return <div className="loading">Loading dashboard data</div>;
+
+  return (
+    <div>
+      <h1>Office Space Dashboard</h1>
+      
+      <div className="stats-grid">
+        <div className="stat-card">
+          <h3>Total Seats</h3>
+          <div className="value">{stats?.totalSeats || 0}</div>
+          <div className="subtext">Across all buildings</div>
+        </div>
+        
+        <div className="stat-card">
+          <h3>Occupied Seats</h3>
+          <div className="value">{stats?.occupiedSeats || 0}</div>
+          <div className="subtext">
+            {stats?.occupancyRate || 0}% occupancy rate
+          </div>
+        </div>
+        
+        <div className="stat-card">
+          <h3>Available Seats</h3>
+          <div className="value">{stats?.vacantSeats || 0}</div>
+          <div className="subtext">Ready for assignment</div>
+        </div>
+        
+        <div className="stat-card">
+          <h3>Active Employees</h3>
+          <div className="value">{stats?.totalEmployees || 0}</div>
+          <div className="subtext">In the system</div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-header">
+          <h2>Quick Actions</h2>
+        </div>
+        <div className="quick-actions">
+          <Link to="/seats" className="action-card">
+            <div className="action-icon">🪑</div>
+            <h3>Manage Seats</h3>
+            <p>Assign, move, or vacate employee seats</p>
+          </Link>
+          
+          <Link to="/import-export" className="action-card">
+            <div className="action-icon">📊</div>
+            <h3>Import Data</h3>
+            <p>Upload Excel files with seat data</p>
+          </Link>
+          
+          <Link to="/reports" className="action-card">
+            <div className="action-icon">📈</div>
+            <h3>View Reports</h3>
+            <p>Analyze occupancy and utilization</p>
+          </Link>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-header">
+          <h2>System Overview</h2>
+        </div>
+        <p>
+          Welcome to the RBC Office Space Management System. This platform helps you efficiently 
+          manage office seating arrangements, track occupancy, and generate reports for better 
+          space utilization.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+export default Dashboard;
+EOF
+Step 4: Update AssignSeatModal Component
+javascriptcat > src/components/AssignSeatModal.js << 'EOF'
+import React, { useState } from 'react';
+import { toast } from 'react-toastify';
+import api from '../services/api';
+
+function AssignSeatModal({ seat, employees, onClose, onAssign }) {
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  // Filter out employees who already have seats
+  const availableEmployees = employees.filter(emp => !emp.currentSeat);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!selectedEmployeeId) {
+      toast.error('Please select an employee');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await api.put(`/seats/${seat.seatId}/assign`, {
+        employeeId: selectedEmployeeId
+      });
+      onAssign();
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Error assigning seat');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>Assign Seat {seat.seatId}</h2>
+          <button className="close-btn" onClick={onClose}>&times;</button>
+        </div>
+        
+        <div className="modal-body">
+          <form onSubmit={handleSubmit}>
+            <div className="form-group">
+              <label>Select Employee</label>
+              <select 
+                className="form-control"
+                value={selectedEmployeeId}
+                onChange={(e) => setSelectedEmployeeId(e.target.value)}
+                required
+              >
+                <option value="">-- Select Employee --</option>
+                {availableEmployees.map(emp => (
+                  <option key={emp._id} value={emp._id}>
+                    {emp.employeeNumber} - {emp.firstName} {emp.lastName} ({emp.department})
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            {availableEmployees.length === 0 && (
+              <div style={{ 
+                padding: '1rem', 
+                backgroundColor: '#FFF7E6', 
+                borderRadius: '4px',
+                marginBottom: '1rem',
+                color: '#B87500'
+              }}>
+                No available employees without seats. All employees are currently assigned.
+              </div>
+            )}
+            
+            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', marginTop: '2rem' }}>
+              <button 
+                type="button" 
+                className="btn btn-secondary"
+                onClick={onClose}
+                disabled={loading}
+              >
+                Cancel
+              </button>
+              <button 
+                type="submit" 
+                className="btn btn-primary"
+                disabled={loading || availableEmployees.length === 0}
+              >
+                {loading ? 'Assigning...' : 'Assign Employee'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default AssignSeatModal;
+EOF
+Step 5: Add RBC Logo and Assets
+You need to add the RBC logo to your project:
+
+Download RBC Logo:
+
+bash# Create public directory if it doesn't exist
+cd ~/office-space-management/frontend/public
+
+# Download a placeholder logo (you should replace with actual RBC logo)
+# For now, let's create a placeholder
+cat > rbc-logo-placeholder.svg << 'EOF'
+<svg width="100" height="50" viewBox="0 0 100 50" xmlns="http://www.w3.org/2000/svg">
+  <rect width="100" height="50" fill="#005DAA"/>
+  <text x="50" y="30" font-family="Arial" font-size="20" font-weight="bold" fill="white" text-anchor="middle">RBC</text>
+</svg>
+EOF
+
+To use the actual RBC logo:
+
+Download the RBC logo from their brand assets or website
+Save it as rbc-logo.png in the frontend/public folder
+The logo should be a white/transparent version for the blue header
+
+
+
+Step 6: Update ImportExport Page with RBC Styling
+javascriptcat > src/pages/ImportExport.js << 'EOF'
+import React, { useState } from 'react';
+import { toast } from 'react-toastify';
+import api from '../services/api';
+
+function ImportExport() {
+  const [file, setFile] = useState(null);
+  const [fileInfo, setFileInfo] = useState(null);
+  const [mappings, setMappings] = useState({});
+  const [importing, setImporting] = useState(false);
+
+  const handleFileChange = (e) => {
+    const selectedFile = e.target.files[0];
+    if (selectedFile) {
+      setFile(selectedFile);
+      analyzeFile(selectedFile);
+    }
+  };
+
+  const analyzeFile = async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const response = await api.post('/import/analyze', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      
+      setFileInfo(response.data);
+      setMappings(response.data.suggestedMappings);
+      toast.success('File analyzed successfully');
+    } catch (error) {
+      toast.error('Error analyzing file');
+      setFile(null);
+    }
+  };
+
+  const handleMappingChange = (excelColumn, dbField) => {
+    setMappings({
+      ...mappings,
+      [excelColumn]: dbField
+    });
+  };
+
+  const handleImport = async () => {
+    if (!fileInfo) return;
+
+    setImporting(true);
+    try {
+      const response = await api.post('/import/execute', {
+        fileId: fileInfo.fileId,
+        mappings
+      });
+      
+      const { results } = response.data;
+      toast.success(
+        `Import completed! Success: ${results.successCount}, Failed: ${results.failedCount}`
+      );
+      
+      // Reset form
+      setFile(null);
+      setFileInfo(null);
+      setMappings({});
+    } catch (error) {
+      toast.error('Error importing data');
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const handleExport = async () => {
+    try {
+      const response = await api.get('/import/export', {
+        responseType: 'blob'
+      });
+      
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `office_space_export_${new Date().toISOString().split('T')[0]}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      
+      toast.success('Export completed');
+    } catch (error) {
+      toast.error('Error exporting data');
+    }
+  };
+
+  const dbFields = [
+    { value: 'seatId', label: 'Seat ID' },
+    { value: 'building', label: 'Building' },
+    { value: 'floor', label: 'Floor' },
+    { value: 'status', label: 'Status' },
+    { value: 'employeeNumber', label: 'Employee Number' },
+    { value: 'firstName', label: 'First Name' },
+    { value: 'lastName', label: 'Last Name' },
+    { value: 'email', label: 'Email' },
+    { value: 'businessGroup', label: 'Business Group' },
+    { value: 'department', label: 'Department' }
+  ];
+
+  return (
+    <div>
+      <h1>Import/Export Data</h1>
+      
+      <div className="card">
+        <div className="card-header">
+          <h2>Export Current Data</h2>
+        </div>
+        <p style={{ marginBottom: '1.5rem' }}>
+          Download the current office space data as an Excel file for reporting or backup purposes.
+        </p>
+        <button className="btn btn-accent" onClick={handleExport}>
+          📥 Export to Excel
+        </button>
+      </div>
+
+      <div className="card">
+        <div className="card-header">
+          <h2>Import Data from Excel</h2>
+        </div>
+        
+        <div className="form-group">
+          <label>Select Excel File (.xlsx or .xls)</label>
+          <input 
+            type="file" 
+            accept=".xlsx,.xls"
+            onChange={handleFileChange}
+            className="form-control"
+            style={{ padding: '0.5rem' }}
+          />
+        </div>
+
+        {fileInfo && (
+          <>
+            <div style={{ 
+              padding: '1rem', 
+              backgroundColor: '#E6F2FA', 
+              borderRadius: '4px',
+              marginBottom: '1.5rem' 
+            }}>
+              <p style={{ margin: '0.5rem 0' }}><strong>File:</strong> {file.name}</p>
+              <p style={{ margin: '0.5rem 0' }}><strong>Total Rows:</strong> {fileInfo.totalRows}</p>
+              <p style={{ margin: '0.5rem 0' }}><strong>Columns Found:</strong> {fileInfo.headers.join(', ')}</p>
+            </div>
+
+            <h3>Column Mapping Configuration</h3>
+            <p style={{ marginBottom: '1rem', color: 'var(--rbc-gray)' }}>
+              Map your Excel columns to the corresponding database fields
+            </p>
+            
+            <div style={{ 
+              display: 'grid', 
+              gap: '1rem', 
+              marginBottom: '2rem' 
+            }}>
+              {fileInfo.headers.map(header => (
+                <div key={header} className="form-group">
+                  <label>{header}</label>
+                  <select 
+                    className="form-control"
+                    value={mappings[header] || ''}
+                    onChange={(e) => handleMappingChange(header, e.target.value)}
+                  >
+                    <option value="">-- Skip this column --</option>
+                    {dbFields.map(field => (
+                      <option key={field.value} value={field.value}>
+                        {field.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+            </div>
+
+            <button 
+              className="btn btn-primary"
+              onClick={handleImport}
+              disabled={importing || Object.keys(mappings).length === 0}
+            >
+              {importing ? 'Importing Data...' : 'Start Import'}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default ImportExport;
+EOF
+Step 7: Install Additional Icon Support
+Since we're using emojis as icons, let's ensure they display well. Alternatively, you can use React Icons:
+bashcd ~/office-space-management/frontend
+npm install react-icons
+Step 8: Create an RBC-styled Loading Component
+Create src/components/Loading.js:
+javascriptcat > src/components/Loading.js << 'EOF'
+import React from 'react';
+
+function Loading({ message = 'Loading...' }) {
+  return (
+    <div className="loading">
+      <div style={{ marginBottom: '1rem' }}>
+        <img 
+          src="/rbc-logo-placeholder.svg" 
+          alt="RBC" 
+          style={{ width: '60px', opacity: 0.3 }}
+        />
+      </div>
+      {message}
+    </div>
+  );
+}
+
+export default Loading;
+EOF
+What You Need to Do:
+
+Get the RBC Logo:
+
+Download the official RBC logo (white version for blue header)
+Save it as rbc-logo.png in frontend/public/ folder
+If you can't get the official logo, the placeholder SVG will work for now
+
+
+Restart your frontend:
+bash# Stop the current frontend (Ctrl+C)
+# Start it again
+cd ~/office-space-management/frontend
+npm start
+
+Optional Enhancements:
+
+Add RBC favicon: Save an RBC icon as favicon.ico in the public folder
+Update public/index.html title to "RBC Office Space Management"
+
+
+
+The application now has:
+
+✅ RBC blue (#005DAA) navigation
+✅ RBC yellow (#FFD200) accents
+✅ Professional banking-style UI
+✅ Clean, modern design matching RBC's website
+✅ Proper spacing and typography
+✅ RBC-branded buttons and forms
+✅ Status badges in RBC style
+
+Your POC now looks like a professional RBC internal application!RetryAGI have few questions:
+What file does this update and what it does:
+cat > rbc-logo-placeholder.svg << 'EOF' <svg width="100" height="50" viewBox="0 0 100 50" xmlns="http://www.w3.org/2000/svg"> <rect width="100" height="50" fill="#005DAA"/> <text x="50" y="30" font-family="Arial" font-size="20" font-weight="bold" fill="white" text-anchor="middle">RBC</text> </svg> EOFwhat is this:
+Optional Enhancements: 
+* Add RBC favicon: Save an RBC icon as favicon.ico in the public folder
+* Update public/index.html title to "RBC Office Space Management"EditDecoded SVG file creation and optional website enhancements.1sThe user is asking about two things:
+
+What the cat > rbc-logo-placeholder.svg << 'EOF' command does
+What the optional enhancements mean
+
+Let me explain both clearly.Great questions! Let me explain both:
+1. What does this command do?
+bashcat > rbc-logo-placeholder.svg << 'EOF'
+<svg width="100" height="50" viewBox="0 0 100 50" xmlns="http://www.w3.org/2000/svg">
+  <rect width="100" height="50" fill="#005DAA"/>
+  <text x="50" y="30" font-family="Arial" font-size="20" font-weight="bold" fill="white" text-anchor="middle">RBC</text>
+</svg>
+EOF
+This command:
+
+Creates a new file called rbc-logo-placeholder.svg in your current directory
+Writes the SVG code (everything between the two EOF markers) into that file
+This creates a simple blue rectangle with "RBC" text as a placeholder logo
+
+Where it creates the file: In frontend/public/ folder (since we did cd ~/office-space-management/frontend/public first)
+What the file looks like: A blue box with white "RBC" text - just a temporary placeholder until you get the real RBC logo
+2. Optional Enhancements Explained
+A. Add RBC Favicon
+A favicon is the small icon that appears in the browser tab next to the page title.
+How to do it:
+
+Find or create a small RBC logo icon (16x16 or 32x32 pixels)
+Save it as favicon.ico in your frontend/public/ folder
+It will automatically appear in browser tabs
+
+Current state: Right now you're using React's default favicon (the React logo)
+B. Update public/index.html title
+Current title: Your browser tab probably shows "React App"
+To change it:
+bash# Open the file
+cd ~/office-space-management/frontend/public
+nano index.html
+Find this line:
+html<title>React App</title>
+Change it to:
+html<title>RBC Office Space Management</title>
+Save the file (Ctrl+X, then Y, then Enter in nano).
+Result: The browser tab will now show "RBC Office Space Management" as the page title.
+Quick Summary:
+
+The SVG command creates a temporary placeholder logo file
+Favicon = small icon in browser tab
+HTML title = text shown in browser tab
+Both enhancements make your app look more professional and branded
+
+These are small touches but they make the application feel more polished and official!RetryAGwrite a commit meesage based on what changed to allign with RBCEditMapped comprehensive UI transformation to align with RBC branding5sThe user wants me to write a commit message for the changes made to align the application with RBC's branding. Based on our conversation, the changes included:
+
+Updated CSS with RBC brand colors and design system
+Updated App.js to include RBC branding and NavLink
+Updated Dashboard with RBC styling
+Updated AssignSeatModal component with RBC styling
+Updated ImportExport page with RBC styling
+Added RBC logo placeholder
+Created Loading component with RBC styling
+Added react-icons dependency
+
+This is a significant UI overhaul to match RBC's visual identity. I should write a comprehensive commit message following conventional commit format.Here's a comprehensive commit message for the RBC branding changes:
+feat: implement RBC brand identity and design system
+
+- Add RBC brand colors (blue #005DAA, yellow #FFD200) throughout the application
+- Update navigation bar with RBC blue background and yellow accent for active states
+- Redesign all UI components to match RBC's professional banking aesthetic
+- Add RBC logo placeholder to navigation (to be replaced with official logo)
+- Update buttons with RBC primary/secondary/accent color schemes
+- Implement RBC-styled cards with subtle shadows and borders
+- Update form controls with RBC blue focus states and proper spacing
+- Redesign stat cards with yellow accent border and improved typography
+- Update table headers with RBC blue background and white text
+- Implement RBC-compliant status badges with appropriate color coding
+- Add loading states and empty states following RBC design patterns
+- Update modal design with RBC styling and proper header/body separation
+- Enhance Dashboard with quick action cards and professional layout
+- Improve ImportExport page with better visual hierarchy
+- Add react-icons dependency for future icon implementation
+- Create responsive design that maintains RBC branding on mobile
+
+BREAKING CHANGE: Complete UI overhaul - all custom CSS overrides will need updating
+Or a shorter version:
+feat: rebrand UI with RBC design system
+
+- Implement RBC color palette (#005DAA blue, #FFD200 yellow)
+- Update all components with RBC's professional banking aesthetic  
+- Add RBC logo to navigation and loading states
+- Redesign buttons, cards, forms, and tables to match RBC.com
+- Create responsive layouts maintaining brand consistency
+
+All UI components now align with RBC's visual identity guidelines
+Use the longer version if your team prefers detailed commit messages, or the shorter one for a more concise git log.RetryAGso if I upload some mock data, and now i want to clean my database, how would I do that, so I can test on a diffent set of dataEditStrategized methods to purge MongoDB for fresh testing.1sThe user wants to know how to clean their MongoDB database to test with different data sets. I should provide them with several methods to clear the database, from clearing specific collections to dropping the entire database.Here's how to clean your MongoDB database to test with different data:
+Methods to Clean Your Database
+Method 1: Clear Specific Collections (Recommended)
+bash# Connect to MongoDB
+mongosh
+
+# Select your database
+use office_space_poc
+
+# Clear specific collections
+db.employees.deleteMany({})
+db.seats.deleteMany({})
+db.assignmenthistories.deleteMany({})
+db.importsessions.deleteMany({})
+
+# Verify they're empty
+db.employees.countDocuments()
+db.seats.countDocuments()
+
+# Exit
+exit
+Method 2: Drop All Collections
+bash# Connect to MongoDB
+mongosh
+
+# Select your database
+use office_space_poc
+
+# Drop all collections (removes structure too)
+db.employees.drop()
+db.seats.drop()
+db.assignmenthistories.drop()
+db.importsessions.drop()
+
+# List remaining collections (should be empty)
+show collections
+
+# Exit
+exit
+Method 3: Drop Entire Database and Recreate
+bash# Connect to MongoDB
+mongosh
+
+# Drop the entire database
+use office_space_poc
+db.dropDatabase()
+
+# Exit
+exit
+Method 4: Create a Cleanup Script
+Create backend/src/utils/cleanDatabase.js:
+javascriptcat > backend/src/utils/cleanDatabase.js << 'EOF'
+const mongoose = require('mongoose');
+require('dotenv').config();
+
+const cleanDatabase = async () => {
+  try {
+    // Connect to MongoDB
+    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/office_space_poc');
+    
+    console.log('Connected to MongoDB');
+    
+    // Get all collections
+    const collections = await mongoose.connection.db.collections();
+    
+    // Clear each collection
+    for (let collection of collections) {
+      await collection.deleteMany({});
+      console.log(`Cleared collection: ${collection.collectionName}`);
+    }
+    
+    console.log('\n✅ Database cleaned successfully!');
+    console.log('All collections are now empty.');
+    
+  } catch (error) {
+    console.error('Error cleaning database:', error);
+  } finally {
+    await mongoose.connection.close();
+    process.exit(0);
+  }
+};
+
+// Add confirmation prompt
+const readline = require('readline').createInterface({
+  input: process.stdin,
+  output: process.stdout
+});
+
+readline.question('⚠️  This will DELETE ALL DATA in the database. Are you sure? (yes/no): ', (answer) => {
+  if (answer.toLowerCase() === 'yes') {
+    cleanDatabase();
+  } else {
+    console.log('Database cleaning cancelled.');
+    process.exit(0);
+  }
+  readline.close();
+});
+EOF
+Run the cleanup script:
+bashcd ~/office-space-management/backend
+node src/utils/cleanDatabase.js
+Method 5: Reset with Sample Data
+Create backend/src/utils/resetDatabase.js:
+javascriptcat > backend/src/utils/resetDatabase.js << 'EOF'
+const mongoose = require('mongoose');
+const Employee = require('../models/Employee');
+const Seat = require('../models/Seat');
+require('dotenv').config();
+
+const resetDatabase = async () => {
+  try {
+    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/office_space_poc');
+    
+    console.log('Connected to MongoDB');
+    
+    // Clear all collections
+    await Employee.deleteMany({});
+    await Seat.deleteMany({});
+    console.log('Cleared existing data');
+    
+    // Create minimal sample data
+    const sampleEmployees = await Employee.create([
+      {
+        employeeNumber: '10001',
+        firstName: 'Sample',
+        lastName: 'Employee',
+        email: 'sample@rbc.com',
+        businessGroup: 'Technology',
+        department: 'IT',
+        transitNumber: 'T001'
+      }
+    ]);
+    
+    // Create a few empty seats
+    const seats = [];
+    for (let i = 1; i <= 10; i++) {
+      seats.push({
+        seatId: `A-${100 + i}`,
+        building: 'Building-A',
+        floor: 1,
+        status: 'vacant'
+      });
+    }
+    
+    await Seat.create(seats);
+    
+    console.log('\n✅ Database reset successfully!');
+    console.log(`Created ${sampleEmployees.length} sample employees`);
+    console.log(`Created ${seats.length} vacant seats`);
+    
+  } catch (error) {
+    console.error('Error resetting database:', error);
+  } finally {
+    await mongoose.connection.close();
+    process.exit(0);
+  }
+};
+
+resetDatabase();
+EOF
+Run it:
+bashnode src/utils/resetDatabase.js
+Quick Commands Summary
+To completely clean the database:
+bash# Quick one-liner to clear all data
+mongosh office_space_poc --eval "db.dropDatabase()"
+To clear specific collections:
+bash# Clear just employees and seats
+mongosh office_space_poc --eval "db.employees.deleteMany({}); db.seats.deleteMany({})"
+To see what's in your database:
+bash# Check current data
+mongosh office_space_poc --eval "db.employees.countDocuments()"
+mongosh office_space_poc --eval "db.seats.countDocuments()"
+Best Practice Workflow
+
+Before testing new data:
+bash# Run the cleanup script
+node src/utils/cleanDatabase.js
+
+Import your new test data:
+
+Go to Import/Export in the UI
+Upload your new Excel file
+
+
+If something goes wrong:
+bash# Reset to minimal clean state
+node src/utils/resetDatabase.js
