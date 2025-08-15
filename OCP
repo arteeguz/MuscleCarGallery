@@ -1,0 +1,441 @@
+# MongoDB Environment Setup Guide
+
+This guide provides a practical approach to connect to the real DEV database from your laptop while figuring out OpenShift deployment.
+
+## Files to Create/Update
+
+### 1. Create Environment Switcher Script
+
+**File:** `backend/scripts/switch-env.js`
+
+```javascript
+#!/usr/bin/env node
+
+const fs = require('fs');
+const path = require('path');
+
+const envFiles = {
+  local: path.join(__dirname, '..', '.env.local'),
+  dev: path.join(__dirname, '..', '.env.dev')
+};
+
+const targetEnvFile = path.join(__dirname, '..', '.env');
+
+const requestedEnv = process.argv[2];
+
+if (!requestedEnv || !envFiles[requestedEnv]) {
+  console.log('Usage: node scripts/switch-env.js [local|dev]');
+  console.log('Available environments:');
+  console.log('  - local (MongoDB on localhost)');
+  console.log('  - dev   (RBC DEV MongoDB)');
+  process.exit(1);
+}
+
+try {
+  if (!fs.existsSync(envFiles[requestedEnv])) {
+    console.error(`❌ Environment file not found: ${envFiles[requestedEnv]}`);
+    console.error(`Please create ${path.basename(envFiles[requestedEnv])} first`);
+    process.exit(1);
+  }
+
+  fs.copyFileSync(envFiles[requestedEnv], targetEnvFile);
+  console.log(`✅ Switched to ${requestedEnv.toUpperCase()} environment`);
+
+  // Check if credentials are needed
+  if (requestedEnv === 'dev') {
+    const envContent = fs.readFileSync(targetEnvFile, 'utf8');
+    if (envContent.includes('YOUR_') || envContent.includes('CHANGE_ME')) {
+      console.log('\n⚠️  WARNING: You need to update credentials in .env.dev');
+      console.log('   Get them from your vault and update:');
+      console.log('   - MONGODB_USERNAME');
+      console.log('   - MONGODB_PASSWORD');
+      console.log('   - MONGODB_NAME');
+    }
+  }
+
+} catch (error) {
+  console.error('❌ Error:', error.message);
+  process.exit(1);
+}
+```
+
+### 2. Create Scripts Directory
+
+```bash
+mkdir -p backend/scripts
+chmod +x backend/scripts/switch-env.js
+```
+
+### 3. Create Environment Files
+
+**File:** `backend/.env.local`
+
+```bash
+# Local MongoDB Environment
+ENVIRONMENT_NAME=local
+PORT=3000
+NODE_ENV=development
+
+# Local MongoDB - no authentication needed
+MONGODB_URI=mongodb://localhost:27017/office_space_poc
+
+# These are not used for local, but kept empty for consistency
+MONGODB_USERNAME=
+MONGODB_PASSWORD=
+MONGODB_HOST=
+MONGODB_PORT=
+MONGODB_NAME=
+```
+
+**File:** `backend/.env.dev`
+
+```bash
+# RBC DEV Database Environment (from your laptop)
+ENVIRONMENT_NAME=dev
+PORT=3000
+NODE_ENV=development
+
+# Leave this empty when using component-based connection
+MONGODB_URI=
+
+# ⚠️  FILL THESE WITH YOUR VAULT CREDENTIALS ⚠️
+MONGODB_USERNAME=CHANGE_ME
+MONGODB_PASSWORD=CHANGE_ME
+MONGODB_HOST=strdlvbugz0002.devfg.rbc.com
+MONGODB_PORT=17127
+MONGODB_NAME=CHANGE_ME
+
+# RBC MongoDB Authentication Settings
+MONGODB_AUTH_MECHANISM=PLAIN
+MONGODB_AUTH_SOURCE=$external
+MONGODB_TLS=true
+
+# Replica set hosts (leave empty if not provided)
+MONGODB_ADDITIONAL_HOST_1=
+MONGODB_ADDITIONAL_HOST_2=
+```
+
+### 4. Update database.js to Handle Both Local and Remote
+
+**File:** `backend/config/database.js`
+
+```javascript
+const mongoose = require('mongoose');
+
+async function connectToMongoDB() {
+  try {
+    const environment = process.env.ENVIRONMENT_NAME || 'unknown';
+    console.log(`🔄 Connecting to MongoDB (${environment} environment)...`);
+    
+    let connectionString;
+    
+    // CASE 1: Direct URI provided (for local MongoDB)
+    if (process.env.MONGODB_URI && process.env.MONGODB_URI.trim() !== '') {
+      console.log('📍 Using direct MongoDB URI (local mode)');
+      connectionString = process.env.MONGODB_URI;
+      
+    // CASE 2: Component-based connection (for RBC databases)  
+    } else if (process.env.MONGODB_USERNAME && process.env.MONGODB_PASSWORD) {
+      console.log('🔐 Building connection from components...');
+      
+      const username = process.env.MONGODB_USERNAME;
+      const password = process.env.MONGODB_PASSWORD;
+      const host = process.env.MONGODB_HOST;
+      const port = process.env.MONGODB_PORT || '27017';
+      const dbName = process.env.MONGODB_NAME;
+      
+      // Validate required fields
+      if (!host || !dbName) {
+        throw new Error('Missing required MongoDB connection parameters');
+      }
+      
+      // Check if credentials are still placeholders
+      if (username === 'CHANGE_ME' || password === 'CHANGE_ME') {
+        throw new Error(
+          '\n❌ MongoDB credentials not configured!\n' +
+          '   Please update .env.dev with your vault credentials:\n' +
+          '   - MONGODB_USERNAME\n' +
+          '   - MONGODB_PASSWORD\n' +
+          '   - MONGODB_NAME'
+        );
+      }
+      
+      // Build connection string
+      const additionalHost1 = process.env.MONGODB_ADDITIONAL_HOST_1;
+      const additionalHost2 = process.env.MONGODB_ADDITIONAL_HOST_2;
+      
+      if (additionalHost1 && additionalHost2) {
+        // Replica set
+        connectionString = `mongodb://${username}:${password}@${host}:${port},${additionalHost1},${additionalHost2}/${dbName}`;
+        console.log('📡 Using replica set connection');
+      } else {
+        // Standalone
+        connectionString = `mongodb://${username}:${password}@${host}:${port}/${dbName}`;
+        console.log('📡 Using standalone connection');
+      }
+      
+      // Add authentication parameters for RBC
+      const authMechanism = process.env.MONGODB_AUTH_MECHANISM || 'PLAIN';
+      const authSource = process.env.MONGODB_AUTH_SOURCE || '$external';
+      connectionString += `?authMechanism=${authMechanism}&authSource=${authSource}`;
+      
+      // Add TLS if required
+      if (process.env.MONGODB_TLS === 'true') {
+        connectionString += '&tls=true';
+        console.log('🔒 TLS enabled');
+      }
+      
+      // Log connection info (without sensitive data)
+      console.log(`🏢 Connecting to: ${host}:${port}`);
+      console.log(`📁 Database: ${dbName}`);
+      
+    } else {
+      throw new Error(
+        'No MongoDB connection configured. Please check your .env file.'
+      );
+    }
+    
+    // Connect with options
+    await mongoose.connect(connectionString, {
+      serverSelectionTimeoutMS: 10000, // 10 second timeout
+      connectTimeoutMS: 10000,
+    });
+    
+    console.log(`✅ Successfully connected to ${environment.toUpperCase()} MongoDB`);
+    
+    // Log database name for confirmation
+    const connectedDB = mongoose.connection.db.databaseName;
+    console.log(`📊 Connected to database: ${connectedDB}`);
+    
+    return mongoose.connection;
+    
+  } catch (error) {
+    console.error('❌ MongoDB connection failed');
+    console.error('Error:', error.message);
+    
+    // Provide helpful error messages
+    if (error.message.includes('ECONNREFUSED')) {
+      console.error('\n💡 Tip: Make sure MongoDB is running locally');
+      console.error('   Run: brew services start mongodb-community');
+    } else if (error.message.includes('ETIMEDOUT')) {
+      console.error('\n💡 Tip: Check if you\'re on RBC network/VPN');
+    } else if (error.message.includes('authentication failed')) {
+      console.error('\n💡 Tip: Verify your vault credentials are correct');
+    }
+    
+    throw error;
+  }
+}
+
+module.exports = { connectToMongoDB };
+```
+
+### 5. Update package.json Scripts
+
+**File:** `backend/package.json`
+
+Update the scripts section:
+
+```json
+{
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "dev:local": "node scripts/switch-env.js local && nodemon server.js",
+    "dev:dev": "node scripts/switch-env.js dev && nodemon server.js",
+    "env:local": "node scripts/switch-env.js local",
+    "env:dev": "node scripts/switch-env.js dev",
+    "test:connection": "node test-connection.js"
+  }
+}
+```
+
+### 6. Create Vault Credentials Helper
+
+**File:** `backend/setup-vault-credentials.js`
+
+```javascript
+const fs = require('fs');
+const path = require('path');
+const readline = require('readline');
+
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout
+});
+
+console.log('🔐 RBC Vault Credentials Setup');
+console.log('==============================\n');
+console.log('This will help you set up your DEV database credentials.\n');
+
+const envDevPath = path.join(__dirname, '.env.dev');
+
+// Read current .env.dev
+let envContent = fs.readFileSync(envDevPath, 'utf8');
+
+const questions = [
+  { key: 'MONGODB_USERNAME', question: 'Enter MongoDB Username from vault: ', hidden: false },
+  { key: 'MONGODB_PASSWORD', question: 'Enter MongoDB Password from vault: ', hidden: true },
+  { key: 'MONGODB_NAME', question: 'Enter MongoDB Database Name from vault: ', hidden: false }
+];
+
+let currentIndex = 0;
+
+function askQuestion() {
+  if (currentIndex >= questions.length) {
+    fs.writeFileSync(envDevPath, envContent);
+    console.log('\n✅ Credentials saved to .env.dev');
+    console.log('🚀 You can now run: npm run dev:dev');
+    rl.close();
+    return;
+  }
+
+  const { key, question } = questions[currentIndex];
+  
+  rl.question(question, (answer) => {
+    // Replace the value in env content
+    const regex = new RegExp(`${key}=.*`, 'g');
+    envContent = envContent.replace(regex, `${key}=${answer}`);
+    currentIndex++;
+    askQuestion();
+  });
+}
+
+console.log('Get these values from your vault:\n');
+askQuestion();
+```
+
+### 7. Update test-connection.js
+
+**File:** `backend/test-connection.js`
+
+```javascript
+require('dotenv').config();
+const { connectToMongoDB } = require('./config/database');
+const mongoose = require('mongoose');
+
+async function test() {
+  console.log('🧪 Testing MongoDB Connection');
+  console.log('============================\n');
+  
+  const env = process.env.ENVIRONMENT_NAME || 'unknown';
+  console.log(`Environment: ${env}`);
+  
+  if (env === 'local') {
+    console.log('Mode: Local MongoDB');
+    console.log(`URI: ${process.env.MONGODB_URI}`);
+  } else {
+    console.log('Mode: Remote MongoDB');
+    console.log(`Host: ${process.env.MONGODB_HOST}`);
+    console.log(`Port: ${process.env.MONGODB_PORT}`);
+    console.log(`Database: ${process.env.MONGODB_NAME}`);
+    console.log(`TLS: ${process.env.MONGODB_TLS}`);
+  }
+  
+  console.log('\nConnecting...\n');
+  
+  try {
+    await connectToMongoDB();
+    console.log('✅ Connection successful!\n');
+    
+    // List collections
+    const collections = await mongoose.connection.db.listCollections().toArray();
+    console.log(`Found ${collections.length} collections:`);
+    collections.forEach(col => console.log(`  - ${col.name}`));
+    
+  } catch (error) {
+    console.error('❌ Connection failed');
+    console.error(error.message);
+  } finally {
+    await mongoose.connection.close();
+    console.log('\nTest complete');
+    process.exit(0);
+  }
+}
+
+test();
+```
+
+## How to Use This Setup
+
+### Step 1: Set Up Your Environments
+
+```bash
+# Go to backend directory
+cd backend
+
+# Create scripts directory if it doesn't exist
+mkdir -p scripts
+
+# Make script executable
+chmod +x scripts/switch-env.js
+```
+
+### Step 2: Local Development (No Credentials Needed)
+
+```bash
+# Switch to local environment and start
+npm run dev:local
+
+# This connects to mongodb://localhost:27017/office_space_poc
+```
+
+### Step 3: Connect to RBC DEV Database
+
+#### Option A: Manual Setup
+
+Edit `.env.dev` and replace:
+- `MONGODB_USERNAME=CHANGE_ME` → Your actual username
+- `MONGODB_PASSWORD=CHANGE_ME` → Your actual password
+- `MONGODB_NAME=CHANGE_ME` → Your actual database name
+
+#### Option B: Use Setup Helper
+
+```bash
+# Run the setup helper
+node setup-vault-credentials.js
+
+# It will prompt you for credentials
+```
+
+Then run:
+
+```bash
+# Switch to dev environment and start
+npm run dev:dev
+
+# This connects to RBC's DEV MongoDB
+```
+
+### Step 4: Test Your Connection
+
+```bash
+# Test current environment
+npm run test:connection
+```
+
+## Quick Reference
+
+```bash
+# Local MongoDB (no setup needed)
+npm run dev:local
+
+# RBC DEV MongoDB (requires vault credentials)
+npm run dev:dev
+
+# Switch environment without starting server
+npm run env:local
+npm run env:dev
+
+# Test connection
+npm run test:connection
+```
+
+## Important Notes
+
+- **First time using DEV:** You MUST get credentials from vault and update `.env.dev`
+- **Switching environments:** The scripts automatically copy the right .env file
+- **Security:** Never commit `.env.dev` with real credentials
+- **VPN:** You'll likely need to be on RBC VPN to connect to DEV database
+
+This setup gives you the flexibility to develop locally or with real data while you figure out OpenShift deployment!
