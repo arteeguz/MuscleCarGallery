@@ -679,3 +679,39 @@ This updated system:
 - Beautiful dashboard visualizations
 - Preserves all raw data for reporting
 - Uses space number as the unique identifier
+
+
+
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "dev:local": "node scripts/switch-env.js local && nodemon server.js",
+    "dev:dev": "node scripts/switch-env.js dev && nodemon server.js",
+    "env:local": "node scripts/switch-env.js local",
+    "env:dev": "node scripts/switch-env.js dev",
+    "test:connection": "node test-connection.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.1",
+    "exceljs": "^4.4.0",
+    "express": "^5.1.0",
+    "mongoose": "^8.17.0",
+    "multer": "^2.0.2",
+    "uuid": "^11.1.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+
+}
+
