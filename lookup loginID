@@ -11,12 +11,16 @@ function Ensure-ImportExcelModule {
         Write-Host "ImportExcel module not found. Installing..." -ForegroundColor Yellow
         try {
             Install-Module -Name ImportExcel -Force -AllowClobber -Scope CurrentUser
+            Import-Module ImportExcel
             Write-Host "ImportExcel module installed successfully." -ForegroundColor Green
         }
         catch {
             Write-Host "Failed to install ImportExcel module. Please install manually." -ForegroundColor Red
             exit
         }
+    }
+    else {
+        Import-Module ImportExcel -Force
     }
 }
 
@@ -159,23 +163,106 @@ if (!(Get-Module -ListAvailable -Name ActiveDirectory)) {
     exit
 }
 
+# Function to show file dialog
+function Get-ExcelFile {
+    Add-Type -AssemblyName System.Windows.Forms
+    $FileBrowser = New-Object System.Windows.Forms.OpenFileDialog
+    $FileBrowser.Title = "Select Excel File with Employee Data"
+    $FileBrowser.InitialDirectory = [Environment]::GetFolderPath('Desktop')
+    $FileBrowser.Filter = "Excel Files (*.xlsx, *.xls)|*.xlsx;*.xls|CSV Files (*.csv)|*.csv|All Files (*.*)|*.*"
+    $FileBrowser.FilterIndex = 1
+    
+    $result = $FileBrowser.ShowDialog()
+    
+    if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
+        return $FileBrowser.FileName
+    }
+    else {
+        return $null
+    }
+}
+
 # Get Excel file path
-do {
-    $excelPath = Read-Host "`nEnter the full path to the Excel file"
-    $excelPath = $excelPath.Trim('"')  # Remove quotes if present
-} while (!(Test-Path $excelPath))
+Write-Host "`nPlease select the Excel file..." -ForegroundColor Yellow
+$excelPath = Get-ExcelFile
+
+if ([string]::IsNullOrWhiteSpace($excelPath)) {
+    Write-Host "No file selected. Exiting..." -ForegroundColor Red
+    exit
+}
+
+Write-Host "Selected file: $excelPath" -ForegroundColor Green
 
 Write-Host "Reading Excel file..." -ForegroundColor Yellow
 
-# Read Excel file
+# Get worksheet names
 try {
-    $excelData = Import-Excel -Path $excelPath
-    Write-Host "Successfully loaded $($excelData.Count) rows from Excel." -ForegroundColor Green
+    $worksheetNames = Get-ExcelSheetInfo -Path $excelPath | Select-Object -ExpandProperty Name
+    
+    if ($worksheetNames.Count -gt 1) {
+        Write-Host "`n===== WORKSHEET SELECTION =====" -ForegroundColor Cyan
+        Write-Host "Multiple sheets found in the Excel file:" -ForegroundColor Yellow
+        
+        for ($i = 0; $i -lt $worksheetNames.Count; $i++) {
+            # Get row count for each sheet
+            $sheetData = Import-Excel -Path $excelPath -WorksheetName $worksheetNames[$i]
+            $rowCount = if ($sheetData) { $sheetData.Count } else { 0 }
+            Write-Host "$($i + 1). $($worksheetNames[$i]) ($rowCount rows)"
+        }
+        
+        Write-Host "$($worksheetNames.Count + 1). Process ALL sheets" -ForegroundColor Green
+        
+        do {
+            $sheetSelection = Read-Host "`nSelect sheet number to process"
+            $selectedSheetIndex = [int]$sheetSelection - 1
+        } while ($selectedSheetIndex -lt 0 -or $selectedSheetIndex -gt $worksheetNames.Count)
+        
+        if ($selectedSheetIndex -eq $worksheetNames.Count) {
+            # Process all sheets
+            $processAllSheets = $true
+            $selectedSheets = $worksheetNames
+            Write-Host "Will process all $($worksheetNames.Count) sheets." -ForegroundColor Green
+        }
+        else {
+            # Process single sheet
+            $processAllSheets = $false
+            $selectedSheets = @($worksheetNames[$selectedSheetIndex])
+            Write-Host "Selected sheet: $($selectedSheets[0])" -ForegroundColor Green
+        }
+    }
+    else {
+        # Only one sheet
+        $processAllSheets = $false
+        $selectedSheets = @($worksheetNames[0])
+        Write-Host "Single sheet found: $($selectedSheets[0])" -ForegroundColor Green
+    }
 }
 catch {
-    Write-Host "Error reading Excel file: $_" -ForegroundColor Red
-    exit
+    Write-Host "Error reading worksheet information: $_" -ForegroundColor Red
+    Write-Host "Attempting to read default sheet..." -ForegroundColor Yellow
+    $processAllSheets = $false
+    $selectedSheets = @("Sheet1")
 }
+
+# Process selected sheet(s)
+$allResults = @()
+$grandTotalFound = 0
+$grandTotalNotFound = 0
+
+foreach ($sheetName in $selectedSheets) {
+    try {
+        if ($processAllSheets) {
+            Write-Host "`n===== PROCESSING SHEET: $sheetName =====" -ForegroundColor Cyan
+        }
+        
+        $excelData = Import-Excel -Path $excelPath -WorksheetName $sheetName
+        
+        if (!$excelData -or $excelData.Count -eq 0) {
+            Write-Host "Sheet '$sheetName' is empty. Skipping..." -ForegroundColor Yellow
+            continue
+        }
+        
+        Write-Host "Successfully loaded $($excelData.Count) rows from sheet '$sheetName'." -ForegroundColor Green
 
 # Get column names
 $columns = $excelData[0].PSObject.Properties.Name
@@ -225,6 +312,30 @@ Write-Host "Total processed: $($excelData.Count)" -ForegroundColor White
 Write-Host "Found in AD: $foundCount" -ForegroundColor Green
 Write-Host "Not found: $notFoundCount" -ForegroundColor Yellow
 
+# Function to show save file dialog
+function Get-SaveLocation {
+    param(
+        [string]$DefaultFileName
+    )
+    
+    Add-Type -AssemblyName System.Windows.Forms
+    $SaveDialog = New-Object System.Windows.Forms.SaveFileDialog
+    $SaveDialog.Title = "Save Excel File with Login IDs"
+    $SaveDialog.InitialDirectory = Split-Path -Parent $DefaultFileName
+    $SaveDialog.FileName = Split-Path -Leaf $DefaultFileName
+    $SaveDialog.Filter = "Excel Files (*.xlsx)|*.xlsx|CSV Files (*.csv)|*.csv|All Files (*.*)|*.*"
+    $SaveDialog.FilterIndex = 1
+    
+    $result = $SaveDialog.ShowDialog()
+    
+    if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
+        return $SaveDialog.FileName
+    }
+    else {
+        return $null
+    }
+}
+
 # Generate output filename
 $directory = Split-Path -Parent $excelPath
 $filename = [System.IO.Path]::GetFileNameWithoutExtension($excelPath)
@@ -234,20 +345,48 @@ $defaultOutputPath = Join-Path $directory "$($filename)_WithLoginIDs_$timestamp$
 
 # Prompt for save location
 Write-Host "`n===== SAVE RESULTS =====" -ForegroundColor Cyan
-Write-Host "Default save location: $defaultOutputPath" -ForegroundColor Gray
-$customPath = Read-Host "Press Enter to use default, or type a new path"
+Write-Host "Choose location to save the results file..." -ForegroundColor Yellow
+$outputPath = Get-SaveLocation -DefaultFileName $defaultOutputPath
 
-if ([string]::IsNullOrWhiteSpace($customPath)) {
+if ([string]::IsNullOrWhiteSpace($outputPath)) {
+    Write-Host "No save location selected. Using default location..." -ForegroundColor Yellow
     $outputPath = $defaultOutputPath
-}
-else {
-    $outputPath = $customPath.Trim('"')
 }
 
 # Export to Excel
 try {
-    $results | Export-Excel -Path $outputPath -AutoSize -AutoFilter -FreezeTopRow -BoldTopRow
-    Write-Host "`nResults successfully saved to:" -ForegroundColor Green
+    if ($processAllSheets) {
+        # When processing multiple sheets, we have options
+        Write-Host "`nHow would you like to save the results?" -ForegroundColor Cyan
+        Write-Host "1. Single combined sheet with all results"
+        Write-Host "2. Separate sheets (matching original structure)"
+        
+        $saveOption = Read-Host "Select option (1 or 2)"
+        
+        if ($saveOption -eq "2") {
+            # Save with multiple sheets matching original
+            foreach ($sheetName in $selectedSheets) {
+                $sheetResults = $allResults | Where-Object { $_.SourceSheet -eq $sheetName }
+                if ($sheetResults) {
+                    # Remove the SourceSheet column for individual sheets
+                    $sheetResults | ForEach-Object { $_.PSObject.Properties.Remove('SourceSheet') }
+                    $sheetResults | Export-Excel -Path $outputPath -WorksheetName $sheetName -AutoSize -AutoFilter -FreezeTopRow -BoldTopRow
+                }
+            }
+            Write-Host "`nResults successfully saved with multiple sheets to:" -ForegroundColor Green
+        }
+        else {
+            # Save as single combined sheet
+            $allResults | Export-Excel -Path $outputPath -WorksheetName "Combined_Results" -AutoSize -AutoFilter -FreezeTopRow -BoldTopRow
+            Write-Host "`nResults successfully saved as combined sheet to:" -ForegroundColor Green
+        }
+    }
+    else {
+        # Single sheet - save normally
+        $allResults | Export-Excel -Path $outputPath -WorksheetName $selectedSheets[0] -AutoSize -AutoFilter -FreezeTopRow -BoldTopRow
+        Write-Host "`nResults successfully saved to:" -ForegroundColor Green
+    }
+    
     Write-Host $outputPath -ForegroundColor White
     
     # Ask if user wants to open the file
@@ -262,7 +401,7 @@ catch {
     # Try to save as CSV as fallback
     $csvPath = [System.IO.Path]::ChangeExtension($outputPath, ".csv")
     try {
-        $results | Export-Csv -Path $csvPath -NoTypeInformation
+        $allResults | Export-Csv -Path $csvPath -NoTypeInformation
         Write-Host "Results saved as CSV instead: $csvPath" -ForegroundColor Yellow
     }
     catch {
