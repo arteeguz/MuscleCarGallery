@@ -1,0 +1,275 @@
+# AD User Login Lookup Script
+# This script reads an Excel file, queries AD for user login information, and exports results
+
+# Import required modules
+Import-Module ActiveDirectory -ErrorAction SilentlyContinue
+Import-Module ImportExcel -ErrorAction SilentlyContinue
+
+# Function to install ImportExcel module if not present
+function Ensure-ImportExcelModule {
+    if (!(Get-Module -ListAvailable -Name ImportExcel)) {
+        Write-Host "ImportExcel module not found. Installing..." -ForegroundColor Yellow
+        try {
+            Install-Module -Name ImportExcel -Force -AllowClobber -Scope CurrentUser
+            Write-Host "ImportExcel module installed successfully." -ForegroundColor Green
+        }
+        catch {
+            Write-Host "Failed to install ImportExcel module. Please install manually." -ForegroundColor Red
+            exit
+        }
+    }
+}
+
+# Function to display column selection menu
+function Show-ColumnMenu {
+    param($columns)
+    
+    Write-Host "`n===== COLUMN SELECTION =====" -ForegroundColor Cyan
+    Write-Host "Available columns in the Excel file:" -ForegroundColor Yellow
+    
+    for ($i = 0; $i -lt $columns.Count; $i++) {
+        Write-Host "$($i + 1). $($columns[$i])"
+    }
+    
+    # Suggest preferred columns if they exist
+    $suggestions = @()
+    if ($columns -contains "EmployeeID" -or $columns -contains "Employee ID") {
+        $suggestions += "Employee ID"
+    }
+    if ($columns -contains "Email" -or $columns -contains "EmailAddress" -or $columns -contains "E-mail") {
+        $suggestions += "Email"
+    }
+    if ($columns -contains "SamAccountName" -or $columns -contains "Username") {
+        $suggestions += "Username/SamAccountName"
+    }
+    
+    if ($suggestions.Count -gt 0) {
+        Write-Host "`nSuggested columns for AD search: $($suggestions -join ', ')" -ForegroundColor Green
+    }
+    
+    do {
+        $selection = Read-Host "`nEnter the number of the column to use for AD search"
+        $selectedIndex = [int]$selection - 1
+    } while ($selectedIndex -lt 0 -or $selectedIndex -ge $columns.Count)
+    
+    return $columns[$selectedIndex]
+}
+
+# Function to search AD based on different attributes
+function Search-ADUser {
+    param(
+        [string]$SearchValue,
+        [string]$SearchColumn
+    )
+    
+    try {
+        $user = $null
+        
+        # Clean up the search value
+        $SearchValue = $SearchValue.Trim()
+        
+        # Determine search approach based on column name
+        switch -Regex ($SearchColumn) {
+            "(?i)email|e-mail|emailaddress" {
+                Write-Verbose "Searching by email: $SearchValue"
+                $user = Get-ADUser -Filter "EmailAddress -eq '$SearchValue'" -Properties SamAccountName, UserPrincipalName -ErrorAction SilentlyContinue
+            }
+            "(?i)employee\s*id|employeeid" {
+                Write-Verbose "Searching by EmployeeID: $SearchValue"
+                $user = Get-ADUser -Filter "EmployeeID -eq '$SearchValue'" -Properties SamAccountName, UserPrincipalName, EmployeeID -ErrorAction SilentlyContinue
+            }
+            "(?i)samaccountname|username|user\s*name|login" {
+                Write-Verbose "Searching by SamAccountName: $SearchValue"
+                $user = Get-ADUser -Identity $SearchValue -Properties SamAccountName, UserPrincipalName -ErrorAction SilentlyContinue
+            }
+            "(?i)first\s*name|firstname" {
+                Write-Verbose "Searching by GivenName: $SearchValue"
+                $user = Get-ADUser -Filter "GivenName -eq '$SearchValue'" -Properties SamAccountName, UserPrincipalName -ErrorAction SilentlyContinue
+            }
+            "(?i)last\s*name|lastname|surname" {
+                Write-Verbose "Searching by Surname: $SearchValue"
+                $user = Get-ADUser -Filter "Surname -eq '$SearchValue'" -Properties SamAccountName, UserPrincipalName -ErrorAction SilentlyContinue
+            }
+            default {
+                # Try multiple approaches
+                Write-Verbose "Trying multiple search approaches for: $SearchValue"
+                
+                # Try as SamAccountName first
+                $user = Get-ADUser -Filter "SamAccountName -eq '$SearchValue'" -Properties SamAccountName, UserPrincipalName -ErrorAction SilentlyContinue
+                
+                # Try as email
+                if (!$user) {
+                    $user = Get-ADUser -Filter "EmailAddress -eq '$SearchValue'" -Properties SamAccountName, UserPrincipalName -ErrorAction SilentlyContinue
+                }
+                
+                # Try as EmployeeID
+                if (!$user) {
+                    $user = Get-ADUser -Filter "EmployeeID -eq '$SearchValue'" -Properties SamAccountName, UserPrincipalName, EmployeeID -ErrorAction SilentlyContinue
+                }
+                
+                # Try as DisplayName
+                if (!$user) {
+                    $user = Get-ADUser -Filter "DisplayName -eq '$SearchValue'" -Properties SamAccountName, UserPrincipalName -ErrorAction SilentlyContinue
+                }
+            }
+        }
+        
+        if ($user) {
+            # Get the domain from the DN or use current domain
+            $domain = $env:USERDOMAIN
+            if ($user.DistinguishedName -match 'DC=([^,]+)') {
+                $domain = $Matches[1].ToUpper()
+            }
+            
+            return @{
+                Found = $true
+                LoginID = "$domain\$($user.SamAccountName)"
+                SamAccountName = $user.SamAccountName
+                UserPrincipalName = $user.UserPrincipalName
+            }
+        }
+        else {
+            return @{
+                Found = $false
+                LoginID = "Not Found"
+            }
+        }
+    }
+    catch {
+        Write-Verbose "Error searching for user: $_"
+        return @{
+            Found = $false
+            LoginID = "Error: $_"
+        }
+    }
+}
+
+# Main script execution
+Clear-Host
+Write-Host "=====================================" -ForegroundColor Cyan
+Write-Host "   AD User Login Lookup Script" -ForegroundColor Cyan
+Write-Host "=====================================" -ForegroundColor Cyan
+
+# Ensure ImportExcel module is available
+Ensure-ImportExcelModule
+
+# Check if AD module is available
+if (!(Get-Module -ListAvailable -Name ActiveDirectory)) {
+    Write-Host "Active Directory module not found. Please install RSAT tools." -ForegroundColor Red
+    exit
+}
+
+# Get Excel file path
+do {
+    $excelPath = Read-Host "`nEnter the full path to the Excel file"
+    $excelPath = $excelPath.Trim('"')  # Remove quotes if present
+} while (!(Test-Path $excelPath))
+
+Write-Host "Reading Excel file..." -ForegroundColor Yellow
+
+# Read Excel file
+try {
+    $excelData = Import-Excel -Path $excelPath
+    Write-Host "Successfully loaded $($excelData.Count) rows from Excel." -ForegroundColor Green
+}
+catch {
+    Write-Host "Error reading Excel file: $_" -ForegroundColor Red
+    exit
+}
+
+# Get column names
+$columns = $excelData[0].PSObject.Properties.Name
+
+# Let user select search column
+$searchColumn = Show-ColumnMenu -columns $columns
+
+Write-Host "`nUsing column '$searchColumn' for AD search." -ForegroundColor Green
+
+# Process each row
+Write-Host "`n===== PROCESSING USERS =====" -ForegroundColor Cyan
+$results = @()
+$notFoundCount = 0
+$foundCount = 0
+
+foreach ($row in $excelData) {
+    $searchValue = $row.$searchColumn
+    
+    if ([string]::IsNullOrWhiteSpace($searchValue)) {
+        Write-Host "Skipping empty value in row" -ForegroundColor Gray
+        $row | Add-Member -NotePropertyName "LoginID" -NotePropertyValue "N/A" -Force
+        $results += $row
+        continue
+    }
+    
+    Write-Host "Searching for: $searchValue... " -NoNewline
+    
+    $adResult = Search-ADUser -SearchValue $searchValue -SearchColumn $searchColumn
+    
+    if ($adResult.Found) {
+        Write-Host "$searchValue - $($adResult.LoginID)" -ForegroundColor Green
+        $foundCount++
+    }
+    else {
+        Write-Host "$searchValue - Not Found" -ForegroundColor Yellow
+        $notFoundCount++
+    }
+    
+    # Add LoginID to the row
+    $row | Add-Member -NotePropertyName "LoginID" -NotePropertyValue $adResult.LoginID -Force
+    $results += $row
+}
+
+# Summary
+Write-Host "`n===== SUMMARY =====" -ForegroundColor Cyan
+Write-Host "Total processed: $($excelData.Count)" -ForegroundColor White
+Write-Host "Found in AD: $foundCount" -ForegroundColor Green
+Write-Host "Not found: $notFoundCount" -ForegroundColor Yellow
+
+# Generate output filename
+$directory = Split-Path -Parent $excelPath
+$filename = [System.IO.Path]::GetFileNameWithoutExtension($excelPath)
+$extension = [System.IO.Path]::GetExtension($excelPath)
+$timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+$defaultOutputPath = Join-Path $directory "$($filename)_WithLoginIDs_$timestamp$extension"
+
+# Prompt for save location
+Write-Host "`n===== SAVE RESULTS =====" -ForegroundColor Cyan
+Write-Host "Default save location: $defaultOutputPath" -ForegroundColor Gray
+$customPath = Read-Host "Press Enter to use default, or type a new path"
+
+if ([string]::IsNullOrWhiteSpace($customPath)) {
+    $outputPath = $defaultOutputPath
+}
+else {
+    $outputPath = $customPath.Trim('"')
+}
+
+# Export to Excel
+try {
+    $results | Export-Excel -Path $outputPath -AutoSize -AutoFilter -FreezeTopRow -BoldTopRow
+    Write-Host "`nResults successfully saved to:" -ForegroundColor Green
+    Write-Host $outputPath -ForegroundColor White
+    
+    # Ask if user wants to open the file
+    $openFile = Read-Host "`nDo you want to open the file now? (Y/N)"
+    if ($openFile -eq 'Y' -or $openFile -eq 'y') {
+        Start-Process $outputPath
+    }
+}
+catch {
+    Write-Host "Error saving Excel file: $_" -ForegroundColor Red
+    
+    # Try to save as CSV as fallback
+    $csvPath = [System.IO.Path]::ChangeExtension($outputPath, ".csv")
+    try {
+        $results | Export-Csv -Path $csvPath -NoTypeInformation
+        Write-Host "Results saved as CSV instead: $csvPath" -ForegroundColor Yellow
+    }
+    catch {
+        Write-Host "Failed to save results: $_" -ForegroundColor Red
+    }
+}
+
+Write-Host "`n===== SCRIPT COMPLETED =====" -ForegroundColor Cyan
+Write-Host "Press any key to exit..."
+$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
