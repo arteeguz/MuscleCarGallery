@@ -1,414 +1,238 @@
-# AD User Login Lookup Script
-# This script reads an Excel file, queries AD for user login information, and exports results
+# AD User Lookup Script with Excel Integration
+# Requires: ActiveDirectory module and ImportExcel module
 
-# Import required modules
-Import-Module ActiveDirectory -ErrorAction SilentlyContinue
-Import-Module ImportExcel -ErrorAction SilentlyContinue
-
-# Function to install ImportExcel module if not present
-function Ensure-ImportExcelModule {
-    if (!(Get-Module -ListAvailable -Name ImportExcel)) {
-        Write-Host "ImportExcel module not found. Installing..." -ForegroundColor Yellow
+# Check and install required modules
+$requiredModules = @('ActiveDirectory', 'ImportExcel')
+foreach ($module in $requiredModules) {
+    if (!(Get-Module -ListAvailable -Name $module)) {
+        Write-Host "Installing $module module..." -ForegroundColor Yellow
         try {
-            Install-Module -Name ImportExcel -Force -AllowClobber -Scope CurrentUser
-            Import-Module ImportExcel
-            Write-Host "ImportExcel module installed successfully." -ForegroundColor Green
-        }
-        catch {
-            Write-Host "Failed to install ImportExcel module. Please install manually." -ForegroundColor Red
+            Install-Module -Name $module -Force -Scope CurrentUser
+            Write-Host "$module module installed successfully." -ForegroundColor Green
+        } catch {
+            Write-Host "Failed to install $module. Please install manually." -ForegroundColor Red
             exit
         }
     }
-    else {
-        Import-Module ImportExcel -Force
-    }
 }
 
-# Function to display column selection menu
-function Show-ColumnMenu {
-    param($columns)
-    
-    Write-Host "`n===== COLUMN SELECTION =====" -ForegroundColor Cyan
-    Write-Host "Available columns in the Excel file:" -ForegroundColor Yellow
-    
-    for ($i = 0; $i -lt $columns.Count; $i++) {
-        Write-Host "$($i + 1). $($columns[$i])"
-    }
-    
-    # Suggest preferred columns if they exist
-    $suggestions = @()
-    if ($columns -contains "EmployeeID" -or $columns -contains "Employee ID") {
-        $suggestions += "Employee ID"
-    }
-    if ($columns -contains "Email" -or $columns -contains "EmailAddress" -or $columns -contains "E-mail") {
-        $suggestions += "Email"
-    }
-    if ($columns -contains "SamAccountName" -or $columns -contains "Username") {
-        $suggestions += "Username/SamAccountName"
-    }
-    
-    if ($suggestions.Count -gt 0) {
-        Write-Host "`nSuggested columns for AD search: $($suggestions -join ', ')" -ForegroundColor Green
-    }
-    
-    do {
-        $selection = Read-Host "`nEnter the number of the column to use for AD search"
-        $selectedIndex = [int]$selection - 1
-    } while ($selectedIndex -lt 0 -or $selectedIndex -ge $columns.Count)
-    
-    return $columns[$selectedIndex]
-}
-
-# Function to search AD based on different attributes
-function Search-ADUser {
-    param(
-        [string]$SearchValue,
-        [string]$SearchColumn
-    )
-    
-    try {
-        $user = $null
-        
-        # Clean up the search value
-        $SearchValue = $SearchValue.Trim()
-        
-        # Determine search approach based on column name
-        switch -Regex ($SearchColumn) {
-            "(?i)email|e-mail|emailaddress" {
-                Write-Verbose "Searching by email: $SearchValue"
-                $user = Get-ADUser -Filter "EmailAddress -eq '$SearchValue'" -Properties SamAccountName, UserPrincipalName -ErrorAction SilentlyContinue
-            }
-            "(?i)employee\s*id|employeeid" {
-                Write-Verbose "Searching by EmployeeID: $SearchValue"
-                $user = Get-ADUser -Filter "EmployeeID -eq '$SearchValue'" -Properties SamAccountName, UserPrincipalName, EmployeeID -ErrorAction SilentlyContinue
-            }
-            "(?i)samaccountname|username|user\s*name|login" {
-                Write-Verbose "Searching by SamAccountName: $SearchValue"
-                $user = Get-ADUser -Identity $SearchValue -Properties SamAccountName, UserPrincipalName -ErrorAction SilentlyContinue
-            }
-            "(?i)first\s*name|firstname" {
-                Write-Verbose "Searching by GivenName: $SearchValue"
-                $user = Get-ADUser -Filter "GivenName -eq '$SearchValue'" -Properties SamAccountName, UserPrincipalName -ErrorAction SilentlyContinue
-            }
-            "(?i)last\s*name|lastname|surname" {
-                Write-Verbose "Searching by Surname: $SearchValue"
-                $user = Get-ADUser -Filter "Surname -eq '$SearchValue'" -Properties SamAccountName, UserPrincipalName -ErrorAction SilentlyContinue
-            }
-            default {
-                # Try multiple approaches
-                Write-Verbose "Trying multiple search approaches for: $SearchValue"
-                
-                # Try as SamAccountName first
-                $user = Get-ADUser -Filter "SamAccountName -eq '$SearchValue'" -Properties SamAccountName, UserPrincipalName -ErrorAction SilentlyContinue
-                
-                # Try as email
-                if (!$user) {
-                    $user = Get-ADUser -Filter "EmailAddress -eq '$SearchValue'" -Properties SamAccountName, UserPrincipalName -ErrorAction SilentlyContinue
-                }
-                
-                # Try as EmployeeID
-                if (!$user) {
-                    $user = Get-ADUser -Filter "EmployeeID -eq '$SearchValue'" -Properties SamAccountName, UserPrincipalName, EmployeeID -ErrorAction SilentlyContinue
-                }
-                
-                # Try as DisplayName
-                if (!$user) {
-                    $user = Get-ADUser -Filter "DisplayName -eq '$SearchValue'" -Properties SamAccountName, UserPrincipalName -ErrorAction SilentlyContinue
-                }
-            }
-        }
-        
-        if ($user) {
-            # Get the domain from the DN or use current domain
-            $domain = $env:USERDOMAIN
-            if ($user.DistinguishedName -match 'DC=([^,]+)') {
-                $domain = $Matches[1].ToUpper()
-            }
-            
-            return @{
-                Found = $true
-                LoginID = "$domain\$($user.SamAccountName)"
-                SamAccountName = $user.SamAccountName
-                UserPrincipalName = $user.UserPrincipalName
-            }
-        }
-        else {
-            return @{
-                Found = $false
-                LoginID = "Not Found"
-            }
-        }
-    }
-    catch {
-        Write-Verbose "Error searching for user: $_"
-        return @{
-            Found = $false
-            LoginID = "Error: $_"
-        }
-    }
-}
-
-# Main script execution
-Clear-Host
-Write-Host "=====================================" -ForegroundColor Cyan
-Write-Host "   AD User Login Lookup Script" -ForegroundColor Cyan
-Write-Host "=====================================" -ForegroundColor Cyan
-
-# Ensure ImportExcel module is available
-Ensure-ImportExcelModule
-
-# Check if AD module is available
-if (!(Get-Module -ListAvailable -Name ActiveDirectory)) {
-    Write-Host "Active Directory module not found. Please install RSAT tools." -ForegroundColor Red
-    exit
-}
+# Import required modules
+Import-Module ActiveDirectory
+Import-Module ImportExcel
 
 # Function to show file dialog
 function Get-ExcelFile {
     Add-Type -AssemblyName System.Windows.Forms
     $FileBrowser = New-Object System.Windows.Forms.OpenFileDialog
-    $FileBrowser.Title = "Select Excel File with Employee Data"
+    $FileBrowser.Title = "Select Excel File"
+    $FileBrowser.Filter = "Excel Files (*.xlsx;*.xls)|*.xlsx;*.xls|All Files (*.*)|*.*"
     $FileBrowser.InitialDirectory = [Environment]::GetFolderPath('Desktop')
-    $FileBrowser.Filter = "Excel Files (*.xlsx, *.xls)|*.xlsx;*.xls|CSV Files (*.csv)|*.csv|All Files (*.*)|*.*"
-    $FileBrowser.FilterIndex = 1
     
-    $result = $FileBrowser.ShowDialog()
-    
-    if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
+    if ($FileBrowser.ShowDialog() -eq 'OK') {
         return $FileBrowser.FileName
+    } else {
+        Write-Host "No file selected. Exiting..." -ForegroundColor Red
+        exit
     }
-    else {
+}
+
+# Function to search AD based on attribute
+function Search-ADUserByAttribute {
+    param(
+        [string]$AttributeName,
+        [string]$AttributeValue
+    )
+    
+    try {
+        # Map common column names to AD attributes
+        $adAttributeMap = @{
+            'EmployeeID' = 'employeeID'
+            'Employee ID' = 'employeeID'
+            'Email' = 'mail'
+            'EmailAddress' = 'mail'
+            'FirstName' = 'givenName'
+            'First Name' = 'givenName'
+            'LastName' = 'sn'
+            'Last Name' = 'sn'
+            'DisplayName' = 'displayName'
+            'Display Name' = 'displayName'
+            'SamAccountName' = 'samAccountName'
+            'UserPrincipalName' = 'userPrincipalName'
+        }
+        
+        # Get the AD attribute name
+        $adAttribute = if ($adAttributeMap.ContainsKey($AttributeName)) {
+            $adAttributeMap[$AttributeName]
+        } else {
+            $AttributeName
+        }
+        
+        # Build filter based on attribute type
+        if ($adAttribute -eq 'employeeID') {
+            $filter = "employeeID -eq '$AttributeValue'"
+        } elseif ($adAttribute -eq 'mail') {
+            $filter = "mail -eq '$AttributeValue'"
+        } elseif ($adAttribute -eq 'givenName' -or $adAttribute -eq 'sn') {
+            $filter = "$adAttribute -like '*$AttributeValue*'"
+        } else {
+            $filter = "$adAttribute -eq '$AttributeValue'"
+        }
+        
+        # Search AD
+        $user = Get-ADUser -Filter $filter -Properties samAccountName, userPrincipalName, distinguishedName -ErrorAction Stop
+        
+        if ($user) {
+            if ($user.Count -gt 1) {
+                Write-Host "Warning: Multiple users found for $AttributeValue. Using first match." -ForegroundColor Yellow
+                $user = $user[0]
+            }
+            
+            # Get domain from DN
+            $domain = ($user.DistinguishedName -split ',DC=' | Select-Object -Skip 1) -join '.'
+            $domain = $domain.Split(',')[0]
+            
+            # Return domain\loginID
+            return "$domain\$($user.samAccountName)"
+        } else {
+            return $null
+        }
+    } catch {
+        Write-Host "Error searching AD for $AttributeValue : $_" -ForegroundColor Red
         return $null
     }
 }
 
-# Get Excel file path
-Write-Host "`nPlease select the Excel file..." -ForegroundColor Yellow
-$excelPath = Get-ExcelFile
+# Main script
+Clear-Host
+Write-Host "================================" -ForegroundColor Cyan
+Write-Host "AD User Lookup Script" -ForegroundColor Cyan
+Write-Host "================================" -ForegroundColor Cyan
+Write-Host ""
 
-if ([string]::IsNullOrWhiteSpace($excelPath)) {
-    Write-Host "No file selected. Exiting..." -ForegroundColor Red
+# Select Excel file
+Write-Host "Please select the Excel file..." -ForegroundColor Yellow
+$excelFile = Get-ExcelFile
+Write-Host "Selected file: $excelFile" -ForegroundColor Green
+Write-Host ""
+
+# Read Excel file
+try {
+    $excelData = Import-Excel -Path $excelFile
+    Write-Host "Successfully loaded Excel file with $($excelData.Count) rows" -ForegroundColor Green
+} catch {
+    Write-Host "Error reading Excel file: $_" -ForegroundColor Red
     exit
 }
 
-Write-Host "Selected file: $excelPath" -ForegroundColor Green
-
-Write-Host "Reading Excel file..." -ForegroundColor Yellow
-
-# Get worksheet names
-try {
-    $worksheetNames = Get-ExcelSheetInfo -Path $excelPath | Select-Object -ExpandProperty Name
-    
-    if ($worksheetNames.Count -gt 1) {
-        Write-Host "`n===== WORKSHEET SELECTION =====" -ForegroundColor Cyan
-        Write-Host "Multiple sheets found in the Excel file:" -ForegroundColor Yellow
-        
-        for ($i = 0; $i -lt $worksheetNames.Count; $i++) {
-            # Get row count for each sheet
-            $sheetData = Import-Excel -Path $excelPath -WorksheetName $worksheetNames[$i]
-            $rowCount = if ($sheetData) { $sheetData.Count } else { 0 }
-            Write-Host "$($i + 1). $($worksheetNames[$i]) ($rowCount rows)"
-        }
-        
-        Write-Host "$($worksheetNames.Count + 1). Process ALL sheets" -ForegroundColor Green
-        
-        do {
-            $sheetSelection = Read-Host "`nSelect sheet number to process"
-            $selectedSheetIndex = [int]$sheetSelection - 1
-        } while ($selectedSheetIndex -lt 0 -or $selectedSheetIndex -gt $worksheetNames.Count)
-        
-        if ($selectedSheetIndex -eq $worksheetNames.Count) {
-            # Process all sheets
-            $processAllSheets = $true
-            $selectedSheets = $worksheetNames
-            Write-Host "Will process all $($worksheetNames.Count) sheets." -ForegroundColor Green
-        }
-        else {
-            # Process single sheet
-            $processAllSheets = $false
-            $selectedSheets = @($worksheetNames[$selectedSheetIndex])
-            Write-Host "Selected sheet: $($selectedSheets[0])" -ForegroundColor Green
-        }
-    }
-    else {
-        # Only one sheet
-        $processAllSheets = $false
-        $selectedSheets = @($worksheetNames[0])
-        Write-Host "Single sheet found: $($selectedSheets[0])" -ForegroundColor Green
-    }
-}
-catch {
-    Write-Host "Error reading worksheet information: $_" -ForegroundColor Red
-    Write-Host "Attempting to read default sheet..." -ForegroundColor Yellow
-    $processAllSheets = $false
-    $selectedSheets = @("Sheet1")
-}
-
-# Process selected sheet(s)
-$allResults = @()
-$grandTotalFound = 0
-$grandTotalNotFound = 0
-
-foreach ($sheetName in $selectedSheets) {
-    try {
-        if ($processAllSheets) {
-            Write-Host "`n===== PROCESSING SHEET: $sheetName =====" -ForegroundColor Cyan
-        }
-        
-        $excelData = Import-Excel -Path $excelPath -WorksheetName $sheetName
-        
-        if (!$excelData -or $excelData.Count -eq 0) {
-            Write-Host "Sheet '$sheetName' is empty. Skipping..." -ForegroundColor Yellow
-            continue
-        }
-        
-        Write-Host "Successfully loaded $($excelData.Count) rows from sheet '$sheetName'." -ForegroundColor Green
-
 # Get column names
 $columns = $excelData[0].PSObject.Properties.Name
+Write-Host ""
+Write-Host "Available columns:" -ForegroundColor Cyan
+for ($i = 0; $i -lt $columns.Count; $i++) {
+    Write-Host "  $($i + 1). $($columns[$i])"
+}
 
-# Let user select search column
-$searchColumn = Show-ColumnMenu -columns $columns
+# Suggest recommended columns
+$recommendedColumns = @('EmployeeID', 'Employee ID', 'Email', 'EmailAddress', 'UserPrincipalName', 'SamAccountName')
+$suggested = $columns | Where-Object { $_ -in $recommendedColumns }
+if ($suggested) {
+    Write-Host ""
+    Write-Host "Recommended column(s) for search: $($suggested -join ', ')" -ForegroundColor Green
+}
 
-Write-Host "`nUsing column '$searchColumn' for AD search." -ForegroundColor Green
+# Ask user to select column
+Write-Host ""
+$selection = Read-Host "Enter the number of the column to use for AD search"
+$selectedIndex = [int]$selection - 1
+
+if ($selectedIndex -lt 0 -or $selectedIndex -ge $columns.Count) {
+    Write-Host "Invalid selection. Exiting..." -ForegroundColor Red
+    exit
+}
+
+$searchColumn = $columns[$selectedIndex]
+Write-Host "Selected column: $searchColumn" -ForegroundColor Green
+Write-Host ""
 
 # Process each row
-Write-Host "`n===== PROCESSING USERS =====" -ForegroundColor Cyan
+Write-Host "Processing rows..." -ForegroundColor Yellow
 $results = @()
-$notFoundCount = 0
-$foundCount = 0
+$progressCount = 0
 
 foreach ($row in $excelData) {
+    $progressCount++
     $searchValue = $row.$searchColumn
     
     if ([string]::IsNullOrWhiteSpace($searchValue)) {
-        Write-Host "Skipping empty value in row" -ForegroundColor Gray
-        $row | Add-Member -NotePropertyName "LoginID" -NotePropertyValue "N/A" -Force
-        $results += $row
-        continue
+        Write-Host "  Row $progressCount: Empty value in $searchColumn column - Skipping" -ForegroundColor Yellow
+        $row | Add-Member -MemberType NoteProperty -Name "LoginID" -Value "" -Force
+    } else {
+        Write-Progress -Activity "Searching AD" -Status "Processing $searchValue" -PercentComplete (($progressCount / $excelData.Count) * 100)
+        
+        $adResult = Search-ADUserByAttribute -AttributeName $searchColumn -AttributeValue $searchValue
+        
+        if ($adResult) {
+            Write-Host "  $searchValue - $adResult" -ForegroundColor Green
+            $row | Add-Member -MemberType NoteProperty -Name "LoginID" -Value $adResult -Force
+        } else {
+            Write-Host "  $searchValue - Not found in AD" -ForegroundColor Yellow
+            $row | Add-Member -MemberType NoteProperty -Name "LoginID" -Value "Not Found" -Force
+        }
     }
     
-    Write-Host "Searching for: $searchValue... " -NoNewline
-    
-    $adResult = Search-ADUser -SearchValue $searchValue -SearchColumn $searchColumn
-    
-    if ($adResult.Found) {
-        Write-Host "$searchValue - $($adResult.LoginID)" -ForegroundColor Green
-        $foundCount++
-    }
-    else {
-        Write-Host "$searchValue - Not Found" -ForegroundColor Yellow
-        $notFoundCount++
-    }
-    
-    # Add LoginID to the row
-    $row | Add-Member -NotePropertyName "LoginID" -NotePropertyValue $adResult.LoginID -Force
     $results += $row
 }
 
-# Summary
-Write-Host "`n===== SUMMARY =====" -ForegroundColor Cyan
-Write-Host "Total processed: $($excelData.Count)" -ForegroundColor White
-Write-Host "Found in AD: $foundCount" -ForegroundColor Green
-Write-Host "Not found: $notFoundCount" -ForegroundColor Yellow
+Write-Progress -Activity "Searching AD" -Completed
+Write-Host ""
+Write-Host "Processing complete!" -ForegroundColor Green
 
-# Function to show save file dialog
-function Get-SaveLocation {
-    param(
-        [string]$DefaultFileName
-    )
-    
-    Add-Type -AssemblyName System.Windows.Forms
-    $SaveDialog = New-Object System.Windows.Forms.SaveFileDialog
-    $SaveDialog.Title = "Save Excel File with Login IDs"
-    $SaveDialog.InitialDirectory = Split-Path -Parent $DefaultFileName
-    $SaveDialog.FileName = Split-Path -Leaf $DefaultFileName
-    $SaveDialog.Filter = "Excel Files (*.xlsx)|*.xlsx|CSV Files (*.csv)|*.csv|All Files (*.*)|*.*"
-    $SaveDialog.FilterIndex = 1
-    
-    $result = $SaveDialog.ShowDialog()
-    
-    if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
-        return $SaveDialog.FileName
+# Save results
+Write-Host ""
+Write-Host "Saving results..." -ForegroundColor Yellow
+
+# Create output filename
+$directory = [System.IO.Path]::GetDirectoryName($excelFile)
+$filename = [System.IO.Path]::GetFileNameWithoutExtension($excelFile)
+$extension = [System.IO.Path]::GetExtension($excelFile)
+$outputFile = Join-Path $directory "$($filename)_WithLoginID$($extension)"
+
+# Check if file exists and ask for overwrite
+if (Test-Path $outputFile) {
+    $overwrite = Read-Host "Output file already exists. Overwrite? (Y/N)"
+    if ($overwrite -ne 'Y' -and $overwrite -ne 'y') {
+        # Ask for new filename
+        Add-Type -AssemblyName System.Windows.Forms
+        $SaveDialog = New-Object System.Windows.Forms.SaveFileDialog
+        $SaveDialog.Title = "Save Excel File As"
+        $SaveDialog.Filter = "Excel Files (*.xlsx)|*.xlsx|All Files (*.*)|*.*"
+        $SaveDialog.InitialDirectory = $directory
+        $SaveDialog.FileName = "$($filename)_WithLoginID.xlsx"
+        
+        if ($SaveDialog.ShowDialog() -eq 'OK') {
+            $outputFile = $SaveDialog.FileName
+        } else {
+            Write-Host "Save cancelled. Results not saved." -ForegroundColor Red
+            exit
+        }
     }
-    else {
-        return $null
-    }
-}
-
-# Generate output filename
-$directory = Split-Path -Parent $excelPath
-$filename = [System.IO.Path]::GetFileNameWithoutExtension($excelPath)
-$extension = [System.IO.Path]::GetExtension($excelPath)
-$timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
-$defaultOutputPath = Join-Path $directory "$($filename)_WithLoginIDs_$timestamp$extension"
-
-# Prompt for save location
-Write-Host "`n===== SAVE RESULTS =====" -ForegroundColor Cyan
-Write-Host "Choose location to save the results file..." -ForegroundColor Yellow
-$outputPath = Get-SaveLocation -DefaultFileName $defaultOutputPath
-
-if ([string]::IsNullOrWhiteSpace($outputPath)) {
-    Write-Host "No save location selected. Using default location..." -ForegroundColor Yellow
-    $outputPath = $defaultOutputPath
 }
 
 # Export to Excel
 try {
-    if ($processAllSheets) {
-        # When processing multiple sheets, we have options
-        Write-Host "`nHow would you like to save the results?" -ForegroundColor Cyan
-        Write-Host "1. Single combined sheet with all results"
-        Write-Host "2. Separate sheets (matching original structure)"
-        
-        $saveOption = Read-Host "Select option (1 or 2)"
-        
-        if ($saveOption -eq "2") {
-            # Save with multiple sheets matching original
-            foreach ($sheetName in $selectedSheets) {
-                $sheetResults = $allResults | Where-Object { $_.SourceSheet -eq $sheetName }
-                if ($sheetResults) {
-                    # Remove the SourceSheet column for individual sheets
-                    $sheetResults | ForEach-Object { $_.PSObject.Properties.Remove('SourceSheet') }
-                    $sheetResults | Export-Excel -Path $outputPath -WorksheetName $sheetName -AutoSize -AutoFilter -FreezeTopRow -BoldTopRow
-                }
-            }
-            Write-Host "`nResults successfully saved with multiple sheets to:" -ForegroundColor Green
-        }
-        else {
-            # Save as single combined sheet
-            $allResults | Export-Excel -Path $outputPath -WorksheetName "Combined_Results" -AutoSize -AutoFilter -FreezeTopRow -BoldTopRow
-            Write-Host "`nResults successfully saved as combined sheet to:" -ForegroundColor Green
-        }
-    }
-    else {
-        # Single sheet - save normally
-        $allResults | Export-Excel -Path $outputPath -WorksheetName $selectedSheets[0] -AutoSize -AutoFilter -FreezeTopRow -BoldTopRow
-        Write-Host "`nResults successfully saved to:" -ForegroundColor Green
-    }
-    
-    Write-Host $outputPath -ForegroundColor White
+    $results | Export-Excel -Path $outputFile -WorksheetName "Users_With_LoginID" -AutoSize -TableStyle Medium2
+    Write-Host "Results saved to: $outputFile" -ForegroundColor Green
     
     # Ask if user wants to open the file
-    $openFile = Read-Host "`nDo you want to open the file now? (Y/N)"
+    $openFile = Read-Host "Do you want to open the output file? (Y/N)"
     if ($openFile -eq 'Y' -or $openFile -eq 'y') {
-        Start-Process $outputPath
+        Start-Process $outputFile
     }
-}
-catch {
-    Write-Host "Error saving Excel file: $_" -ForegroundColor Red
-    
-    # Try to save as CSV as fallback
-    $csvPath = [System.IO.Path]::ChangeExtension($outputPath, ".csv")
-    try {
-        $allResults | Export-Csv -Path $csvPath -NoTypeInformation
-        Write-Host "Results saved as CSV instead: $csvPath" -ForegroundColor Yellow
-    }
-    catch {
-        Write-Host "Failed to save results: $_" -ForegroundColor Red
-    }
+} catch {
+    Write-Host "Error saving file: $_" -ForegroundColor Red
 }
 
-Write-Host "`n===== SCRIPT COMPLETED =====" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "Script completed!" -ForegroundColor Cyan
 Write-Host "Press any key to exit..."
 $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
