@@ -1,2 +1,0 @@
-=IFERROR(INDEX('[2025SummerInternsTechPickUp.xlsx]MasterTracker'!$K:$K, MATCH(A2, '[2025SummerInternsTechPickUp.xlsx]TechPickUp'!$D:$D, 0)), "")
-
