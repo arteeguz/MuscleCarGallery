@@ -47,8 +47,11 @@ This automatically sets: `REACT_APP_API_URL=http://guedlvaugz0001.saifg.rbc.com:
 ### 1.5 Build Frontend for Production
 
 ```bash
-npm ci
-npm run build:server
+  cd ../frontend
+  npm run env:server
+  export REACT_APP_API_URL=http://guedlvaugz0001.saifg.rbc.com:3000/api
+  npm ci
+  npm run build
 ```
 
 ### 1.6 Create Deployment Package
